@@ -2,7 +2,7 @@
 #include <M5GFX.h>
 #include <LittleFS.h>
 #include <vector>
-#include <cmath>
+#antml:parameter name="cmath">
 
 // ネオンテトラの構造体
 struct NeonTetra {
@@ -20,9 +20,9 @@ struct NeonTetra {
 std::vector<NeonTetra> fishes;
 M5GFX gfx;
 LGFX_Device* display;
-uint8_t* fish_image_right = nullptr;
-uint8_t* fish_image_left = nullptr;
-uint32_t fish_image_size = 0;
+M5Canvas fish_sprite_right;
+M5Canvas fish_sprite_left;
+bool sprites_loaded = false;
 
 // 関数プロトタイプ
 void initDisplay();
@@ -31,7 +31,6 @@ void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawFishes();
 void drawBackground();
-bool loadPNGFromLittleFS(const char* path, uint8_t*& buffer, uint32_t& size);
 
 void setup() {
     // M5Stackの初期化
@@ -83,46 +82,66 @@ void initDisplay() {
 }
 
 void loadFishImages() {
+    // スプライトを初期化
+    fish_sprite_right.setColorDepth(16);
+    fish_sprite_left.setColorDepth(16);
+    
     // 右向きの魚の画像を読み込み
-    if (!loadPNGFromLittleFS("/images/neon_tetra_side_optimized.png", fish_image_right, fish_image_size)) {
-        M5_LOGE("Failed to load fish image (right)");
+    File file_right = LittleFS.open("/images/neon_tetra_side_optimized.png", "r");
+    if (file_right) {
+        fish_sprite_right.createSprite(358, 200);
+        if (fish_sprite_right.drawPngFile(&file_right, 0, 0)) {
+            M5_LOGI("Loaded fish image (right)");
+            sprites_loaded = true;
+        } else {
+            M5_LOGE("Failed to draw fish image (right)");
+        }
+        file_right.close();
+    } else {
+        M5_LOGE("Failed to open fish image file (right)");
     }
     
     // 左向きの魚の画像を読み込み
-    if (!loadPNGFromLittleFS("/images/neon_tetra_left_optimized.png", fish_image_left, fish_image_size)) {
-        M5_LOGE("Failed to load fish image (left)");
-    }
-}
-
-bool loadPNGFromLittleFS(const char* path, uint8_t*& buffer, uint32_t& size) {
-    // 簡易的な実装：ファイルサイズを取得して、バッファに読み込む
-    File file = LittleFS.open(path, "r");
-    if (!file) {
-        M5_LOGE("File not found: %s", path);
-        return false;
-    }
-    
-    size = file.size();
-    buffer = (uint8_t*)malloc(size);
-    if (!buffer) {
-        M5_LOGE("Memory allocation failed");
-        file.close();
-        return false;
+    File file_left = LittleFS.open("/images/neon_tetra_left_optimized.png", "r");
+    if (file_left) {
+        fish_sprite_left.createSprite(358, 200);
+        if (fish_sprite_left.drawPngFile(&file_left, 0, 0)) {
+            M5_LOGI("Loaded fish image (left)");
+        } else {
+            M5_LOGE("Failed to draw fish image (left)");
+        }
+        file_left.close();
+    } else {
+        M5_LOGE("Failed to open fish image file (left)");
     }
     
-    file.readBytes((char*)buffer, size);
-    file.close();
-    
-    M5_LOGI("Loaded image: %s (size: %d bytes)", path, size);
-    return true;
+    // 画像の読み込みに失敗した場合のフォールバック
+    if (!sprites_loaded) {
+        M5_LOGW("Using fallback graphics");
+        // 右向きの魚
+        fish_sprite_right.createSprite(358, 200);
+        fish_sprite_right.fillSprite(TFT_TRANSPARENT);
+        fish_sprite_right.fillEllipse(179, 100, 120, 60, TFT_CYAN);
+        fish_sprite_right.fillEllipse(240, 100, 80, 40, TFT_RED);
+        fish_sprite_right.fillCircle(140, 90, 8, TFT_WHITE);
+        fish_sprite_right.fillCircle(140, 90, 4, TFT_BLACK);
+        
+        // 左向きの魚
+        fish_sprite_left.createSprite(358, 200);
+        fish_sprite_left.fillSprite(TFT_TRANSPARENT);
+        fish_sprite_left.fillEllipse(179, 100, 120, 60, TFT_CYAN);
+        fish_sprite_left.fillEllipse(118, 100, 80, 40, TFT_RED);
+        fish_sprite_left.fillCircle(218, 90, 8, TFT_WHITE);
+        fish_sprite_left.fillCircle(218, 90, 4, TFT_BLACK);
+    }
 }
 
 void initFishes() {
     // 複数の魚を初期化
     for (int i = 0; i < 3; i++) {
         NeonTetra fish;
-        fish.x = random(0, display->width());
-        fish.y = random(100, display->height() - 100);
+        fish.x = random(0, display->width() - 358);
+        fish.y = random(100, display->height() - 300);
         fish.vx = (random(0, 2) == 0 ? 1 : -1) * (0.5f + random(0, 100) / 200.0f);
         fish.vy = (random(0, 2) == 0 ? 1 : -1) * (0.1f + random(0, 50) / 500.0f);
         fish.facing_right = fish.vx > 0;
@@ -186,23 +205,12 @@ void drawBackground() {
 }
 
 void drawFishes() {
-    // 注：実際のPNG描画にはM5GFXのpngDrawメソッドを使用する必要があります
-    // ここでは簡略化のため、矩形で魚を表現します
-    
+    // スプライトを使用して魚を描画
     for (const auto& fish : fishes) {
-        // 魚の体を描画（簡略版）
-        uint32_t color = display->color565(0, 255, 150); // ネオンテトラの色
-        
-        // 魚の体
-        display->fillRect(fish.x, fish.y, fish.width / 4, fish.height, color);
-        
-        // 目
-        display->fillCircle(fish.x + (fish.facing_right ? fish.width / 4 - 5 : 5), 
-                           fish.y + fish.height / 2 - 10, 3, TFT_WHITE);
-        
-        // 赤い部分
-        uint32_t red_color = display->color565(255, 50, 50);
-        display->fillRect(fish.x + fish.width / 4, fish.y + fish.height / 3, 
-                         fish.width / 2, fish.height / 3, red_color);
+        if (fish.facing_right) {
+            fish_sprite_right.pushSprite(display, fish.x, fish.y, TFT_TRANSPARENT);
+        } else {
+            fish_sprite_left.pushSprite(display, fish.x, fish.y, TFT_TRANSPARENT);
+        }
     }
 }
