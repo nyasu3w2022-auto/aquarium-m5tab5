@@ -250,11 +250,11 @@ void drawScene() {
         int draw_x = (int)fish.x;
         int draw_y = (int)(fish.y + y_offset);
         
-        // 向きに応じて画像を使い分け
+        // 向きに応じて画像を使い分け（画像ファイルの向きに合わせて逆にする）
         if (fish.facing_right) {
-            fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+            fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 右向きには左向き画像（頭が右）
         } else {
-            fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+            fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 左向きには右向き画像（頭が左）
         }
     }
     
