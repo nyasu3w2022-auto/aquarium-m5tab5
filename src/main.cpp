@@ -22,6 +22,9 @@ struct NeonTetra {
     // 前回の描画位置（部分更新用）
     int prev_draw_x;
     int prev_draw_y;
+    // 今回の描画位置
+    int curr_draw_x;
+    int curr_draw_y;
 };
 
 // グローバル変数
@@ -30,7 +33,7 @@ M5GFX gfx;
 LGFX_Device* display;
 M5Canvas fish_sprite_right;
 M5Canvas fish_sprite_left;
-M5Canvas fish_canvas;  // 魚描画用の小キャンバス（背景と合成用）
+M5Canvas buffer_canvas;  // ダブルバッファ用キャンバス
 bool sprites_loaded = false;
 int screen_width = 0;
 int screen_height = 0;
@@ -39,6 +42,10 @@ uint16_t bg_color;  // 背景色
 // 魚画像のサイズ
 const int FISH_WIDTH = 358;
 const int FISH_HEIGHT = 200;
+
+// ダブルバッファの最大サイズ（PSRAMに確保）
+int buffer_max_width = 0;
+int buffer_max_height = 0;
 
 // 関数プロトタイプ
 void initDisplay();
@@ -79,7 +86,7 @@ void loop() {
     // 魚を更新
     updateFishes(delta_ms);
     
-    // シーンを描画（部分更新）
+    // シーンを描画（最小矩形ダブルバッファ）
     drawScene();
 }
 
@@ -98,13 +105,17 @@ void initDisplay() {
     // 最初に背景を一度だけ描画
     display->fillScreen(bg_color);
     
-    // 魚描画用の小キャンバスを作成（PSRAMを使用）
-    fish_canvas.setColorDepth(16);
-    fish_canvas.setPsram(true);
-    fish_canvas.createSprite(FISH_WIDTH, FISH_HEIGHT);
+    // ダブルバッファ用キャンバスを作成（最大サイズで確保）
+    // 魚3匹が横に並ぶ可能性を考慮
+    buffer_max_width = screen_width;  // 最大で画面幅
+    buffer_max_height = FISH_HEIGHT + 20;  // 魚の高さ + 余裕
+    
+    buffer_canvas.setColorDepth(16);
+    buffer_canvas.setPsram(true);
+    buffer_canvas.createSprite(buffer_max_width, buffer_max_height);
     
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
-    M5_LOGI("Partial update with compositing enabled");
+    M5_LOGI("Buffer canvas: %d x %d", buffer_max_width, buffer_max_height);
 }
 
 void loadFishImages() {
@@ -114,7 +125,7 @@ void loadFishImages() {
     fish_sprite_left.setColorDepth(16);
     fish_sprite_left.setPsram(true);
     
-    // 右向きの魚の画像を読み込み（左右反転させた画像）
+    // 右向きの魚の画像を読み込み
     File file_right = LittleFS.open("/images/neon_tetra_right_optimized.png", "r");
     if (file_right) {
         size_t file_size = file_right.size();
@@ -124,7 +135,7 @@ void loadFishImages() {
             file_right.close();
             
             fish_sprite_right.createSprite(FISH_WIDTH, FISH_HEIGHT);
-            fish_sprite_right.fillSprite(TFT_BLACK);  // 背景を黒で塗りつぶし
+            fish_sprite_right.fillSprite(TFT_BLACK);
             if (fish_sprite_right.drawPng(buffer, file_size, 0, 0)) {
                 M5_LOGI("Loaded fish image (right)");
                 sprites_loaded = true;
@@ -150,7 +161,7 @@ void loadFishImages() {
             file_left.close();
             
             fish_sprite_left.createSprite(FISH_WIDTH, FISH_HEIGHT);
-            fish_sprite_left.fillSprite(TFT_BLACK);  // 背景を黒で塗りつぶし
+            fish_sprite_left.fillSprite(TFT_BLACK);
             if (fish_sprite_left.drawPng(buffer, file_size, 0, 0)) {
                 M5_LOGI("Loaded fish image (left)");
             } else {
@@ -168,7 +179,6 @@ void loadFishImages() {
     // 画像の読み込みに失敗した場合のフォールバック
     if (!sprites_loaded) {
         M5_LOGW("Using fallback graphics");
-        // 右向きの魚
         fish_sprite_right.createSprite(FISH_WIDTH, FISH_HEIGHT);
         fish_sprite_right.fillSprite(TFT_BLACK);
         fish_sprite_right.fillEllipse(179, 100, 120, 60, TFT_CYAN);
@@ -176,7 +186,6 @@ void loadFishImages() {
         fish_sprite_right.fillCircle(140, 90, 8, TFT_WHITE);
         fish_sprite_right.fillCircle(140, 90, 4, TFT_BLACK);
         
-        // 左向きの魚
         fish_sprite_left.createSprite(FISH_WIDTH, FISH_HEIGHT);
         fish_sprite_left.fillSprite(TFT_BLACK);
         fish_sprite_left.fillEllipse(179, 100, 120, 60, TFT_CYAN);
@@ -198,14 +207,15 @@ void initFishes() {
         fish.width = FISH_WIDTH;
         fish.height = FISH_HEIGHT;
         fish.last_direction_change = millis();
-        fish.swim_phase = random(0, 628) / 100.0f;  // 0〜2πのランダム位相
-        fish.swim_speed = 3.0f + random(0, 200) / 100.0f;  // 3〜5の個体差
-        fish.is_turning = false;  // 方向転換中ではない
-        fish.turn_progress = 0.0f;  // 方向転換の進行度
-        fish.turn_target_right = fish.facing_right;  // 現在の向き
-        // 前回の描画位置を初期化
+        fish.swim_phase = random(0, 628) / 100.0f;
+        fish.swim_speed = 3.0f + random(0, 200) / 100.0f;
+        fish.is_turning = false;
+        fish.turn_progress = 0.0f;
+        fish.turn_target_right = fish.facing_right;
         fish.prev_draw_x = (int)fish.x;
         fish.prev_draw_y = (int)fish.y;
+        fish.curr_draw_x = fish.prev_draw_x;
+        fish.curr_draw_y = fish.prev_draw_y;
         
         fishes.push_back(fish);
     }
@@ -216,7 +226,7 @@ void updateFishes(uint32_t delta_ms) {
     
     for (auto& fish : fishes) {
         // 位置を更新
-        fish.x += fish.vx * delta_sec * 50; // スケール調整
+        fish.x += fish.vx * delta_sec * 50;
         fish.y += fish.vy * delta_sec * 50;
         
         // 泳ぎのアニメーション位相を更新
@@ -230,7 +240,6 @@ void updateFishes(uint32_t delta_ms) {
             fish.vx = -fish.vx;
             bool new_facing = fish.vx > 0;
             if (new_facing != fish.facing_right && !fish.is_turning) {
-                // 方向転換アニメーションを開始
                 fish.is_turning = true;
                 fish.turn_progress = 0.0f;
                 fish.turn_target_right = new_facing;
@@ -249,7 +258,6 @@ void updateFishes(uint32_t delta_ms) {
             fish.vx += (random(0, 2) == 0 ? 1 : -1) * (0.1f + random(0, 50) / 500.0f);
             fish.vy += (random(0, 2) == 0 ? 1 : -1) * (0.05f + random(0, 30) / 600.0f);
             
-            // 速度の制限
             float speed = sqrt(fish.vx * fish.vx + fish.vy * fish.vy);
             if (speed > 2.0f) {
                 fish.vx = (fish.vx / speed) * 2.0f;
@@ -258,7 +266,6 @@ void updateFishes(uint32_t delta_ms) {
             
             bool new_facing = fish.vx > 0;
             if (new_facing != fish.facing_right && !fish.is_turning) {
-                // 方向転換アニメーションを開始
                 fish.is_turning = true;
                 fish.turn_progress = 0.0f;
                 fish.turn_target_right = new_facing;
@@ -268,67 +275,99 @@ void updateFishes(uint32_t delta_ms) {
         
         // 方向転換アニメーションの更新
         if (fish.is_turning) {
-            fish.turn_progress += delta_sec * 1.0f;  // 約1秒で完了
+            fish.turn_progress += delta_sec * 1.0f;
             if (fish.turn_progress >= 1.0f) {
                 fish.turn_progress = 1.0f;
                 fish.is_turning = false;
                 fish.facing_right = fish.turn_target_right;
             }
         }
+        
+        // 今回の描画位置を計算
+        float y_offset = sin(fish.swim_phase) * 5.0f;
+        fish.curr_draw_x = (int)fish.x;
+        fish.curr_draw_y = (int)(fish.y + y_offset);
     }
 }
 
 void drawScene() {
-    // 各魚を個別に処理（消去→合成→描画をセットで行う）
-    for (auto& fish : fishes) {
-        // 泳ぎのアニメーション効果：上下の揺れ
-        float y_offset = sin(fish.swim_phase) * 5.0f;
+    // 1. 全ての魚の前回位置と今回位置を含む最小矩形を計算
+    int min_x = screen_width;
+    int min_y = screen_height;
+    int max_x = 0;
+    int max_y = 0;
+    
+    for (const auto& fish : fishes) {
+        // 前回位置
+        min_x = min(min_x, fish.prev_draw_x);
+        min_y = min(min_y, fish.prev_draw_y);
+        max_x = max(max_x, fish.prev_draw_x + FISH_WIDTH);
+        max_y = max(max_y, fish.prev_draw_y + FISH_HEIGHT);
         
-        // 描画位置
-        int draw_x = (int)fish.x;
-        int draw_y = (int)(fish.y + y_offset);
+        // 今回位置
+        min_x = min(min_x, fish.curr_draw_x);
+        min_y = min(min_y, fish.curr_draw_y);
+        max_x = max(max_x, fish.curr_draw_x + FISH_WIDTH);
+        max_y = max(max_y, fish.curr_draw_y + FISH_HEIGHT);
+    }
+    
+    // 画面内にクリップ
+    min_x = max(0, min_x);
+    min_y = max(0, min_y);
+    max_x = min(screen_width, max_x);
+    max_y = min(screen_height, max_y);
+    
+    int rect_width = max_x - min_x;
+    int rect_height = max_y - min_y;
+    
+    // バッファサイズを超える場合は制限
+    if (rect_width > buffer_max_width) rect_width = buffer_max_width;
+    if (rect_height > buffer_max_height) rect_height = buffer_max_height;
+    
+    if (rect_width <= 0 || rect_height <= 0) return;
+    
+    // 2. バッファキャンバスに背景色を塗る
+    buffer_canvas.fillSprite(bg_color);
+    
+    // 3. バッファキャンバスに全ての魚を描画
+    for (const auto& fish : fishes) {
+        // バッファ内での相対位置
+        int rel_x = fish.curr_draw_x - min_x;
+        int rel_y = fish.curr_draw_y - min_y;
         
-        // 1. 前回の位置を背景色で消去
-        display->fillRect(fish.prev_draw_x, fish.prev_draw_y, FISH_WIDTH, FISH_HEIGHT, bg_color);
-        
-        // 2. 小キャンバスに背景色を塗る
-        fish_canvas.fillSprite(bg_color);
-        
-        // 3. 小キャンバスに魚を描画（透過色を指定）
         if (fish.is_turning) {
-            // 方向転換アニメーション：横幅のスケール変化
             float scale_x = 1.0f;
             M5Canvas* source_sprite;
             
             if (fish.turn_progress < 0.5f) {
-                // 0.0 → 0.5: 横幅が 1.0 → 0.0 （縮小）
                 scale_x = 1.0f - (fish.turn_progress * 2.0f);
                 source_sprite = fish.facing_right ? &fish_sprite_right : &fish_sprite_left;
             } else {
-                // 0.5 → 1.0: 横幅が 0.0 → 1.0 （拡大）
                 scale_x = (fish.turn_progress - 0.5f) * 2.0f;
                 source_sprite = fish.turn_target_right ? &fish_sprite_right : &fish_sprite_left;
             }
             
-            // スケール変化を適用
             if (scale_x > 0.05f) {
-                // キャンバスの中心に描画
-                source_sprite->pushRotateZoom(&fish_canvas, FISH_WIDTH/2, FISH_HEIGHT/2, 0, scale_x, 1.0f, TFT_BLACK);
+                int center_x = rel_x + FISH_WIDTH / 2;
+                int center_y = rel_y + FISH_HEIGHT / 2;
+                source_sprite->pushRotateZoom(&buffer_canvas, center_x, center_y, 0, scale_x, 1.0f, TFT_BLACK);
             }
         } else {
-            // 通常描画
             if (fish.facing_right) {
-                fish_sprite_right.pushSprite(&fish_canvas, 0, 0, TFT_BLACK);
+                fish_sprite_right.pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
             } else {
-                fish_sprite_left.pushSprite(&fish_canvas, 0, 0, TFT_BLACK);
+                fish_sprite_left.pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
             }
         }
-        
-        // 4. 小キャンバスを画面に転送（透過なし、完全に上書き）
-        fish_canvas.pushSprite(display, draw_x, draw_y);
-        
-        // 今回の描画位置を保存（次回の消去用）
-        fish.prev_draw_x = draw_x;
-        fish.prev_draw_y = draw_y;
+    }
+    
+    // 4. バッファキャンバスを画面に一括転送（ダブルバッファ）
+    // pushSpriteでは矩形の一部だけを転送できないので、pushImageを使う
+    buffer_canvas.pushSprite(display, min_x, min_y);
+    
+    // 5. 前回の描画位置を更新
+    for (auto& fish : fishes) {
+        fish.prev_draw_x = fish.curr_draw_x;
+        fish.prev_draw_y = fish.curr_draw_y;
     }
 }
