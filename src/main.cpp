@@ -1,6 +1,6 @@
 #include <M5Unified.h>
 #include <M5GFX.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <vector>
 #include <cmath>
 
@@ -31,7 +31,7 @@ void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawFishes();
 void drawBackground();
-bool loadPNGFromSPIFFS(const char* path, uint8_t*& buffer, uint32_t& size);
+bool loadPNGFromLittleFS(const char* path, uint8_t*& buffer, uint32_t& size);
 
 void setup() {
     // M5Stackの初期化
@@ -41,9 +41,9 @@ void setup() {
     // ディスプレイの初期化
     initDisplay();
     
-    // SPIFFSの初期化
-    if (!SPIFFS.begin(true)) {
-        M5_LOGE("SPIFFS Mount Failed");
+    // LittleFSの初期化
+    if (!LittleFS.begin(true)) {
+        M5_LOGE("LittleFS Mount Failed");
         return;
     }
     
@@ -84,19 +84,19 @@ void initDisplay() {
 
 void loadFishImages() {
     // 右向きの魚の画像を読み込み
-    if (!loadPNGFromSPIFFS("/images/neon_tetra_side_optimized.png", fish_image_right, fish_image_size)) {
+    if (!loadPNGFromLittleFS("/images/neon_tetra_side_optimized.png", fish_image_right, fish_image_size)) {
         M5_LOGE("Failed to load fish image (right)");
     }
     
     // 左向きの魚の画像を読み込み
-    if (!loadPNGFromSPIFFS("/images/neon_tetra_left_optimized.png", fish_image_left, fish_image_size)) {
+    if (!loadPNGFromLittleFS("/images/neon_tetra_left_optimized.png", fish_image_left, fish_image_size)) {
         M5_LOGE("Failed to load fish image (left)");
     }
 }
 
-bool loadPNGFromSPIFFS(const char* path, uint8_t*& buffer, uint32_t& size) {
+bool loadPNGFromLittleFS(const char* path, uint8_t*& buffer, uint32_t& size) {
     // 簡易的な実装：ファイルサイズを取得して、バッファに読み込む
-    File file = SPIFFS.open(path, "r");
+    File file = LittleFS.open(path, "r");
     if (!file) {
         M5_LOGE("File not found: %s", path);
         return false;
