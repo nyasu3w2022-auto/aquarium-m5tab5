@@ -196,7 +196,7 @@ void initFishes() {
         fish.last_direction_change = millis();
         fish.swim_phase = random(0, 628) / 100.0f;  // 0〜2πのランダム位相
         fish.swim_speed = 3.0f + random(0, 200) / 100.0f;  // 3〜5の個体差
-        fish.rotation = fish.facing_right ? 0.0f : 180.0f;  // 初期回転角度
+        fish.rotation = fish.facing_right ? 180.0f : 0.0f;  // 初期回転角度（右向き=180度、左向き=0度）
         fish.target_rotation = fish.rotation;  // 目標回転角度
         
         fishes.push_back(fish);
@@ -221,7 +221,7 @@ void updateFishes(uint32_t delta_ms) {
         if (fish.x < 0 || fish.x + fish.width > screen_width) {
             fish.vx = -fish.vx;
             fish.facing_right = fish.vx > 0;
-            fish.target_rotation = fish.facing_right ? 0.0f : 180.0f;
+            fish.target_rotation = fish.facing_right ? 180.0f : 0.0f;
             fish.x = constrain(fish.x, 0, screen_width - fish.width);
         }
         
@@ -244,7 +244,7 @@ void updateFishes(uint32_t delta_ms) {
             }
             
             fish.facing_right = fish.vx > 0;
-            fish.target_rotation = fish.facing_right ? 0.0f : 180.0f;
+            fish.target_rotation = fish.facing_right ? 180.0f : 0.0f;
             fish.last_direction_change = current_time;
         }
         
