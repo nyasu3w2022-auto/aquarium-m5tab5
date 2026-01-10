@@ -101,8 +101,8 @@ void loadFishImages() {
     fish_sprite_left.setColorDepth(16);
     fish_sprite_left.setPsram(true);
     
-    // 右向きの魚の画像を読み込み
-    File file_right = LittleFS.open("/images/neon_tetra_side_optimized.png", "r");
+    // 右向きの魚の画像を読み込み（左右反転させた画像）
+    File file_right = LittleFS.open("/images/neon_tetra_right_optimized.png", "r");
     if (file_right) {
         size_t file_size = file_right.size();
         uint8_t* buffer = (uint8_t*)malloc(file_size);
@@ -250,11 +250,11 @@ void drawScene() {
         int draw_x = (int)fish.x;
         int draw_y = (int)(fish.y + y_offset);
         
-        // 向きに応じて画像を使い分け（画像ファイルの向きに合わせて逆にする）
+        // 向きに応じて画像を使い分け
         if (fish.facing_right) {
-            fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 右向きには左向き画像（頭が右）
+            fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 右向きには右向き画像（頭が右）
         } else {
-            fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 左向きには右向き画像（頭が左）
+            fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 左向きには左向き画像（頭が左）
         }
     }
     
