@@ -215,15 +215,8 @@ void updateFishes(uint32_t delta_ms) {
 }
 
 void drawBackground() {
-    // 水色のグラデーション背景
-    for (int y = 0; y < display->height(); y++) {
-        // 上から下へ濃くなるグラデーション
-        uint8_t r = map(y, 0, display->height(), 100, 50);
-        uint8_t g = map(y, 0, display->height(), 180, 120);
-        uint8_t b = map(y, 0, display->height(), 220, 180);
-        uint32_t color = display->color565(r, g, b);
-        display->drawFastHLine(0, y, display->width(), color);
-    }
+    // 青一色の背景（高速描画）
+    display->fillScreen(display->color565(50, 120, 180));
 }
 
 void drawFishes() {
