@@ -16,8 +16,6 @@ struct NeonTetra {
     uint32_t last_direction_change; // 最後に方向が変わった時刻
     float swim_phase;  // 泳ぎのアニメーション位相
     float swim_speed;  // 泳ぎの速度（個体差）
-    float rotation;    // 現在の回転角度（方向転換用）
-    float target_rotation; // 目標の回転角度
 };
 
 // グローバル変数
@@ -27,7 +25,6 @@ LGFX_Device* display;
 M5Canvas canvas;           // ダブルバッファ用キャンバス
 M5Canvas fish_sprite_right;
 M5Canvas fish_sprite_left;
-M5Canvas fish_rotated;     // 回転用の一時スプライト
 bool sprites_loaded = false;
 int screen_width = 0;
 int screen_height = 0;
@@ -38,7 +35,6 @@ void loadFishImages();
 void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawScene();
-void drawFishWithAnimation(const NeonTetra& fish);
 
 void setup() {
     // M5Stackの初期化
@@ -93,11 +89,6 @@ void initDisplay() {
     canvas.setColorDepth(16);
     canvas.setPsram(true);  // PSRAMを使用
     canvas.createSprite(screen_width, screen_height);
-    
-    // 回転用スプライトを作成
-    fish_rotated.setColorDepth(16);
-    fish_rotated.setPsram(true);
-    fish_rotated.createSprite(400, 250);  // 回転時のはみ出しを考慮
     
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
     M5_LOGI("Double buffer created");
@@ -196,8 +187,6 @@ void initFishes() {
         fish.last_direction_change = millis();
         fish.swim_phase = random(0, 628) / 100.0f;  // 0〜2πのランダム位相
         fish.swim_speed = 3.0f + random(0, 200) / 100.0f;  // 3〜5の個体差
-        fish.rotation = fish.facing_right ? 180.0f : 0.0f;  // 初期回転角度（右向き=180度、左向き=0度）
-        fish.target_rotation = fish.rotation;  // 目標回転角度
         
         fishes.push_back(fish);
     }
@@ -221,7 +210,6 @@ void updateFishes(uint32_t delta_ms) {
         if (fish.x < 0 || fish.x + fish.width > screen_width) {
             fish.vx = -fish.vx;
             fish.facing_right = fish.vx > 0;
-            fish.target_rotation = fish.facing_right ? 180.0f : 0.0f;
             fish.x = constrain(fish.x, 0, screen_width - fish.width);
         }
         
@@ -244,73 +232,30 @@ void updateFishes(uint32_t delta_ms) {
             }
             
             fish.facing_right = fish.vx > 0;
-            fish.target_rotation = fish.facing_right ? 180.0f : 0.0f;
             fish.last_direction_change = current_time;
         }
-        
-        // 回転角度を滑らかに更新（方向転換アニメーション）
-        float rotation_diff = fish.target_rotation - fish.rotation;
-        
-        // -180〜180度の範囲に正規化
-        while (rotation_diff > 180.0f) rotation_diff -= 360.0f;
-        while (rotation_diff < -180.0f) rotation_diff += 360.0f;
-        
-        // 滑らかに回転（約180度/秒）
-        if (abs(rotation_diff) > 0.5f) {
-            fish.rotation += rotation_diff * delta_sec * 3.0f;
-        } else {
-            fish.rotation = fish.target_rotation;
-        }
-        
-        // 0〜360度の範囲に正規化
-        while (fish.rotation >= 360.0f) fish.rotation -= 360.0f;
-        while (fish.rotation < 0.0f) fish.rotation += 360.0f;
     }
-}
-
-void drawFishWithAnimation(const NeonTetra& fish) {
-    // 泳ぎのアニメーション効果
-    // 1. 上下の揺れ（サイン波）
-    float y_offset = sin(fish.swim_phase) * 5.0f;
-    
-    // 2. 進行方向への傾き（速度に応じて）
-    float tilt_angle = fish.vy * 3.0f;  // 上下移動に応じて傾く
-    
-    // 3. 尾びれの動きを模した微小な回転
-    float tail_wobble = sin(fish.swim_phase * 2) * 2.0f;
-    
-    // 4. 方向転換の回転角度を追加
-    float direction_angle = fish.rotation + 180.0f;  // 180度加えて上下を反転
-    
-    // 合計の傾き角度（度）
-    float total_angle = direction_angle + tilt_angle + tail_wobble;
-    
-    // 描画位置
-    float draw_x = fish.x;
-    float draw_y = fish.y + y_offset;
-    
-    // 常に回転して描画（方向転換に対応）
-    fish_rotated.fillSprite(TFT_BLACK);
-    
-    // 中心を基準に回転
-    int center_x = 200;
-    int center_y = 125;
-    
-    // 右向きの画像を使用（回転で向きを制御）
-    fish_sprite_right.pushRotateZoom(&fish_rotated, center_x, center_y, 
-                                      total_angle, 1.0f, 1.0f, TFT_BLACK);
-    
-    // 回転したスプライトをキャンバスに描画
-    fish_rotated.pushSprite(&canvas, (int)draw_x - 21, (int)draw_y - 25, TFT_BLACK);
 }
 
 void drawScene() {
     // 1. キャンバスに背景を描画
     canvas.fillSprite(canvas.color565(50, 120, 180));
     
-    // 2. キャンバスに魚を描画（アニメーション付き）
+    // 2. キャンバスに魚を描画
     for (const auto& fish : fishes) {
-        drawFishWithAnimation(fish);
+        // 泳ぎのアニメーション効果：上下の揺れ
+        float y_offset = sin(fish.swim_phase) * 5.0f;
+        
+        // 描画位置
+        int draw_x = (int)fish.x;
+        int draw_y = (int)(fish.y + y_offset);
+        
+        // 向きに応じて画像を使い分け
+        if (fish.facing_right) {
+            fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+        } else {
+            fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+        }
     }
     
     // 3. キャンバスを画面に一括転送（ダブルバッファ）
