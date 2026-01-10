@@ -1,4 +1,4 @@
-# AQUAZONE M5Stack TAB5 Edition
+# Aquarium M5Stack TAB5 Edition
 
 M5Stack TAB5上で動作するネオンテトラ飼育シミュレーションアプリケーションです。
 
