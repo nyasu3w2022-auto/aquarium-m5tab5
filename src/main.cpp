@@ -326,8 +326,9 @@ void drawScene() {
     
     if (rect_width <= 0 || rect_height <= 0) return;
     
-    // 2. バッファキャンバスに背景色を塗る
-    buffer_canvas.fillSprite(bg_color);
+    // 2. バッファキャンバスの必要な領域だけに背景色を塗る
+    // 全体を塗るのではなく、矩形領域だけを塗る
+    buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
     
     // 3. バッファキャンバスに全ての魚を描画
     for (const auto& fish : fishes) {
@@ -361,9 +362,10 @@ void drawScene() {
         }
     }
     
-    // 4. バッファキャンバスを画面に一括転送（ダブルバッファ）
-    // pushSpriteでは矩形の一部だけを転送できないので、pushImageを使う
-    buffer_canvas.pushSprite(display, min_x, min_y);
+    // 4. バッファキャンバスの矩形領域だけを画面に転送（真の部分転送）
+    // pushImageを使って、バッファの一部だけを転送
+    display->pushImage(min_x, min_y, rect_width, rect_height, 
+                       (uint16_t*)buffer_canvas.getBuffer());
     
     // 5. 前回の描画位置を更新
     for (auto& fish : fishes) {
