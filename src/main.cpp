@@ -78,7 +78,7 @@ void loop() {
 void initDisplay() {
     // M5Unified経由でディスプレイを初期化
     display = &M5.Display;
-    display->setRotation(1);  // 横向き（landscape）に設定
+    display->setRotation(3);  // 横向き（landscape、180度回転）に設定
     display->fillScreen(TFT_BLACK);
     
     // 画面サイズを取得
@@ -181,7 +181,7 @@ void initFishes() {
         fish.y = random(100, screen_height - 300);
         fish.vx = (random(0, 2) == 0 ? 1 : -1) * (0.5f + random(0, 100) / 200.0f);
         fish.vy = (random(0, 2) == 0 ? 1 : -1) * (0.1f + random(0, 50) / 500.0f);
-        fish.facing_right = fish.vx > 0;
+        fish.facing_right = fish.vx < 0;  // 左右が逆なので修正
         fish.width = 358;   // 最適化された画像の幅
         fish.height = 200;  // 最適化された画像の高さ
         fish.last_direction_change = millis();
@@ -209,7 +209,7 @@ void updateFishes(uint32_t delta_ms) {
         // 画面の端で反射
         if (fish.x < 0 || fish.x + fish.width > screen_width) {
             fish.vx = -fish.vx;
-            fish.facing_right = fish.vx > 0;
+            fish.facing_right = fish.vx < 0;  // 左右が逆なので修正
             fish.x = constrain(fish.x, 0, screen_width - fish.width);
         }
         
@@ -231,7 +231,7 @@ void updateFishes(uint32_t delta_ms) {
                 fish.vy = (fish.vy / speed) * 2.0f;
             }
             
-            fish.facing_right = fish.vx > 0;
+            fish.facing_right = fish.vx < 0;  // 左右が逆なので修正
             fish.last_direction_change = current_time;
         }
     }
