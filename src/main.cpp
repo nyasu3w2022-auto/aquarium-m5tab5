@@ -20,17 +20,19 @@ struct NeonTetra {
 std::vector<NeonTetra> fishes;
 M5GFX gfx;
 LGFX_Device* display;
+M5Canvas canvas;           // ダブルバッファ用キャンバス
 M5Canvas fish_sprite_right;
 M5Canvas fish_sprite_left;
 bool sprites_loaded = false;
+int screen_width = 0;
+int screen_height = 0;
 
 // 関数プロトタイプ
 void initDisplay();
 void loadFishImages();
 void initFishes();
 void updateFishes(uint32_t delta_ms);
-void drawFishes();
-void drawBackground();
+void drawScene();
 
 void setup() {
     // M5Stackの初期化
@@ -61,14 +63,11 @@ void loop() {
     uint32_t delta_ms = current_time - last_time;
     last_time = current_time;
     
-    // 背景を描画
-    drawBackground();
-    
     // 魚を更新
     updateFishes(delta_ms);
     
-    // 魚を描画
-    drawFishes();
+    // シーンを描画（ダブルバッファ）
+    drawScene();
     
     // フレームレート制御（約30FPS）
     delay(33);
@@ -79,12 +78,26 @@ void initDisplay() {
     display = &M5.Display;
     display->setRotation(1);  // 横向き（landscape）に設定
     display->fillScreen(TFT_BLACK);
+    
+    // 画面サイズを取得
+    screen_width = display->width();
+    screen_height = display->height();
+    
+    // ダブルバッファ用キャンバスを作成（PSRAMを使用）
+    canvas.setColorDepth(16);
+    canvas.setPsram(true);  // PSRAMを使用
+    canvas.createSprite(screen_width, screen_height);
+    
+    M5_LOGI("Display size: %d x %d", screen_width, screen_height);
+    M5_LOGI("Double buffer created");
 }
 
 void loadFishImages() {
-    // スプライトを初期化
+    // スプライトを初期化（PSRAMを使用）
     fish_sprite_right.setColorDepth(16);
+    fish_sprite_right.setPsram(true);
     fish_sprite_left.setColorDepth(16);
+    fish_sprite_left.setPsram(true);
     
     // 右向きの魚の画像を読み込み
     File file_right = LittleFS.open("/images/neon_tetra_side_optimized.png", "r");
@@ -142,7 +155,7 @@ void loadFishImages() {
         M5_LOGW("Using fallback graphics");
         // 右向きの魚
         fish_sprite_right.createSprite(358, 200);
-        fish_sprite_right.fillSprite(TFT_TRANSPARENT);
+        fish_sprite_right.fillSprite(TFT_BLACK);
         fish_sprite_right.fillEllipse(179, 100, 120, 60, TFT_CYAN);
         fish_sprite_right.fillEllipse(240, 100, 80, 40, TFT_RED);
         fish_sprite_right.fillCircle(140, 90, 8, TFT_WHITE);
@@ -150,7 +163,7 @@ void loadFishImages() {
         
         // 左向きの魚
         fish_sprite_left.createSprite(358, 200);
-        fish_sprite_left.fillSprite(TFT_TRANSPARENT);
+        fish_sprite_left.fillSprite(TFT_BLACK);
         fish_sprite_left.fillEllipse(179, 100, 120, 60, TFT_CYAN);
         fish_sprite_left.fillEllipse(118, 100, 80, 40, TFT_RED);
         fish_sprite_left.fillCircle(218, 90, 8, TFT_WHITE);
@@ -162,8 +175,8 @@ void initFishes() {
     // 複数の魚を初期化
     for (int i = 0; i < 3; i++) {
         NeonTetra fish;
-        fish.x = random(0, display->width() - 358);
-        fish.y = random(100, display->height() - 300);
+        fish.x = random(0, screen_width - 358);
+        fish.y = random(100, screen_height - 300);
         fish.vx = (random(0, 2) == 0 ? 1 : -1) * (0.5f + random(0, 100) / 200.0f);
         fish.vy = (random(0, 2) == 0 ? 1 : -1) * (0.1f + random(0, 50) / 500.0f);
         fish.facing_right = fish.vx > 0;
@@ -184,15 +197,15 @@ void updateFishes(uint32_t delta_ms) {
         fish.y += fish.vy * delta_sec * 50;
         
         // 画面の端で反射
-        if (fish.x < 0 || fish.x + fish.width > display->width()) {
+        if (fish.x < 0 || fish.x + fish.width > screen_width) {
             fish.vx = -fish.vx;
             fish.facing_right = fish.vx > 0;
-            fish.x = constrain(fish.x, 0, display->width() - fish.width);
+            fish.x = constrain(fish.x, 0, screen_width - fish.width);
         }
         
-        if (fish.y < 0 || fish.y + fish.height > display->height()) {
+        if (fish.y < 0 || fish.y + fish.height > screen_height) {
             fish.vy = -fish.vy;
-            fish.y = constrain(fish.y, 0, display->height() - fish.height);
+            fish.y = constrain(fish.y, 0, screen_height - fish.height);
         }
         
         // ランダムに方向を変更
@@ -214,18 +227,19 @@ void updateFishes(uint32_t delta_ms) {
     }
 }
 
-void drawBackground() {
-    // 青一色の背景（高速描画）
-    display->fillScreen(display->color565(50, 120, 180));
-}
-
-void drawFishes() {
-    // スプライトを使用して魚を描画
+void drawScene() {
+    // 1. キャンバスに背景を描画
+    canvas.fillSprite(canvas.color565(50, 120, 180));
+    
+    // 2. キャンバスに魚を描画
     for (const auto& fish : fishes) {
         if (fish.facing_right) {
-            fish_sprite_right.pushSprite(display, fish.x, fish.y, TFT_BLACK);
+            fish_sprite_right.pushSprite(&canvas, fish.x, fish.y, TFT_BLACK);
         } else {
-            fish_sprite_left.pushSprite(display, fish.x, fish.y, TFT_BLACK);
+            fish_sprite_left.pushSprite(&canvas, fish.x, fish.y, TFT_BLACK);
         }
     }
+    
+    // 3. キャンバスを画面に一括転送（ダブルバッファ）
+    canvas.pushSprite(display, 0, 0);
 }
