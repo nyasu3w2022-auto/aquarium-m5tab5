@@ -1,6 +1,7 @@
 #include <M5Unified.h>
 #include <M5GFX.h>
 #include <LittleFS.h>
+#include <vector>
 #include <cmath>
 
 // ネオンテトラの構造体
@@ -88,14 +89,24 @@ void loadFishImages() {
     // 右向きの魚の画像を読み込み
     File file_right = LittleFS.open("/images/neon_tetra_side_optimized.png", "r");
     if (file_right) {
-        fish_sprite_right.createSprite(358, 200);
-        if (fish_sprite_right.drawPngFile(file_right, 0, 0)) {
-            M5_LOGI("Loaded fish image (right)");
-            sprites_loaded = true;
+        size_t file_size = file_right.size();
+        uint8_t* buffer = (uint8_t*)malloc(file_size);
+        if (buffer) {
+            file_right.readBytes((char*)buffer, file_size);
+            file_right.close();
+            
+            fish_sprite_right.createSprite(358, 200);
+            if (fish_sprite_right.drawPng(buffer, file_size, 0, 0)) {
+                M5_LOGI("Loaded fish image (right)");
+                sprites_loaded = true;
+            } else {
+                M5_LOGE("Failed to draw fish image (right)");
+            }
+            free(buffer);
         } else {
-            M5_LOGE("Failed to draw fish image (right)");
+            M5_LOGE("Memory allocation failed (right)");
+            file_right.close();
         }
-        file_right.close();
     } else {
         M5_LOGE("Failed to open fish image file (right)");
     }
@@ -103,13 +114,23 @@ void loadFishImages() {
     // 左向きの魚の画像を読み込み
     File file_left = LittleFS.open("/images/neon_tetra_left_optimized.png", "r");
     if (file_left) {
-        fish_sprite_left.createSprite(358, 200);
-        if (fish_sprite_left.drawPngFile(file_left, 0, 0)) {
-            M5_LOGI("Loaded fish image (left)");
+        size_t file_size = file_left.size();
+        uint8_t* buffer = (uint8_t*)malloc(file_size);
+        if (buffer) {
+            file_left.readBytes((char*)buffer, file_size);
+            file_left.close();
+            
+            fish_sprite_left.createSprite(358, 200);
+            if (fish_sprite_left.drawPng(buffer, file_size, 0, 0)) {
+                M5_LOGI("Loaded fish image (left)");
+            } else {
+                M5_LOGE("Failed to draw fish image (left)");
+            }
+            free(buffer);
         } else {
-            M5_LOGE("Failed to draw fish image (left)");
+            M5_LOGE("Memory allocation failed (left)");
+            file_left.close();
         }
-        file_left.close();
     } else {
         M5_LOGE("Failed to open fish image file (left)");
     }
