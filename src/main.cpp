@@ -280,7 +280,7 @@ void drawFishWithAnimation(const NeonTetra& fish) {
     float tail_wobble = sin(fish.swim_phase * 2) * 2.0f;
     
     // 4. 方向転換の回転角度を追加
-    float direction_angle = fish.rotation;
+    float direction_angle = fish.rotation + 180.0f;  // 180度加えて上下を反転
     
     // 合計の傾き角度（度）
     float total_angle = direction_angle + tilt_angle + tail_wobble;
