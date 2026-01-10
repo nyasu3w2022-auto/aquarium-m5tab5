@@ -78,7 +78,7 @@ void loop() {
 void initDisplay() {
     // M5Unified経由でディスプレイを初期化
     display = &M5.Display;
-    display->setRotation(0);
+    display->setRotation(1);  // 横向き（landscape）に設定
     display->fillScreen(TFT_BLACK);
 }
 
