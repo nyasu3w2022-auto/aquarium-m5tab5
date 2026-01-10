@@ -19,18 +19,23 @@ struct NeonTetra {
     bool is_turning;   // 方向転換中かどうか
     float turn_progress; // 方向転換の進行度（0.0〜1.0）
     bool turn_target_right; // 方向転換後の向き
+    // 前回の描画位置（部分更新用）
+    int prev_draw_x;
+    int prev_draw_y;
+    int prev_draw_w;
+    int prev_draw_h;
 };
 
 // グローバル変数
 std::vector<NeonTetra> fishes;
 M5GFX gfx;
 LGFX_Device* display;
-M5Canvas canvas;           // ダブルバッファ用キャンバス
 M5Canvas fish_sprite_right;
 M5Canvas fish_sprite_left;
 bool sprites_loaded = false;
 int screen_width = 0;
 int screen_height = 0;
+uint16_t bg_color;  // 背景色
 
 // 関数プロトタイプ
 void initDisplay();
@@ -38,6 +43,7 @@ void loadFishImages();
 void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawScene();
+void clearFishArea(int x, int y, int w, int h);
 
 void setup() {
     // M5Stackの初期化
@@ -71,7 +77,7 @@ void loop() {
     // 魚を更新
     updateFishes(delta_ms);
     
-    // シーンを描画（ダブルバッファ）
+    // シーンを描画（部分更新）
     drawScene();
 }
 
@@ -79,19 +85,19 @@ void initDisplay() {
     // M5Unified経由でディスプレイを初期化
     display = &M5.Display;
     display->setRotation(3);  // 横向き（landscape、180度回転）に設定
-    display->fillScreen(TFT_BLACK);
     
     // 画面サイズを取得
     screen_width = display->width();
     screen_height = display->height();
     
-    // ダブルバッファ用キャンバスを作成（PSRAMを使用）
-    canvas.setColorDepth(16);
-    canvas.setPsram(true);  // PSRAMを使用
-    canvas.createSprite(screen_width, screen_height);
+    // 背景色を設定
+    bg_color = display->color565(50, 120, 180);
+    
+    // 最初に背景を一度だけ描画
+    display->fillScreen(bg_color);
     
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
-    M5_LOGI("Double buffer created");
+    M5_LOGI("Partial update mode enabled");
 }
 
 void loadFishImages() {
@@ -190,6 +196,11 @@ void initFishes() {
         fish.is_turning = false;  // 方向転換中ではない
         fish.turn_progress = 0.0f;  // 方向転換の進行度
         fish.turn_target_right = fish.facing_right;  // 現在の向き
+        // 前回の描画位置を初期化
+        fish.prev_draw_x = (int)fish.x;
+        fish.prev_draw_y = (int)fish.y;
+        fish.prev_draw_w = fish.width;
+        fish.prev_draw_h = fish.height;
         
         fishes.push_back(fish);
     }
@@ -263,17 +274,23 @@ void updateFishes(uint32_t delta_ms) {
 }
 
 void drawScene() {
-    // 1. キャンバスに背景を描画
-    canvas.fillSprite(canvas.color565(50, 120, 180));
+    // 1. 前回の描画位置を背景色で消去
+    for (auto& fish : fishes) {
+        // 前回の位置を背景色で塗りつぶす
+        display->fillRect(fish.prev_draw_x, fish.prev_draw_y, 
+                         fish.prev_draw_w, fish.prev_draw_h, bg_color);
+    }
     
-    // 2. キャンバスに魚を描画
-    for (const auto& fish : fishes) {
+    // 2. 新しい位置に魚を描画
+    for (auto& fish : fishes) {
         // 泳ぎのアニメーション効果：上下の揺れ
         float y_offset = sin(fish.swim_phase) * 5.0f;
         
         // 描画位置
         int draw_x = (int)fish.x;
         int draw_y = (int)(fish.y + y_offset);
+        int draw_w = fish.width;
+        int draw_h = fish.height;
         
         if (fish.is_turning) {
             // 方向転換アニメーション：横幅のスケール変化
@@ -295,18 +312,23 @@ void drawScene() {
                 // 中心位置を計算
                 int center_x = draw_x + 179;
                 int center_y = draw_y + 100;
-                source_sprite->pushRotateZoom(&canvas, center_x, center_y, 0, scale_x, 1.0f, TFT_BLACK);
+                source_sprite->pushRotateZoom(display, center_x, center_y, 0, scale_x, 1.0f, TFT_BLACK);
+                draw_w = (int)(fish.width * scale_x);
+                draw_x = center_x - draw_w / 2;
             }
         } else {
             // 通常描画（スケールなし）
             if (fish.facing_right) {
-                fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+                fish_sprite_right.pushSprite(display, draw_x, draw_y, TFT_BLACK);
             } else {
-                fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+                fish_sprite_left.pushSprite(display, draw_x, draw_y, TFT_BLACK);
             }
         }
+        
+        // 今回の描画位置を保存（次回の消去用）
+        fish.prev_draw_x = draw_x;
+        fish.prev_draw_y = draw_y;
+        fish.prev_draw_w = draw_w;
+        fish.prev_draw_h = draw_h;
     }
-    
-    // 3. キャンバスを画面に一括転送（ダブルバッファ）
-    canvas.pushSprite(display, 0, 0);
 }
