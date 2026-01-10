@@ -16,6 +16,9 @@ struct NeonTetra {
     uint32_t last_direction_change; // 最後に方向が変わった時刻
     float swim_phase;  // 泳ぎのアニメーション位相
     float swim_speed;  // 泳ぎの速度（個体差）
+    bool is_turning;   // 方向転換中かどうか
+    float turn_progress; // 方向転換の進行度（0.0〜1.0）
+    bool turn_target_right; // 方向転換後の向き
 };
 
 // グローバル変数
@@ -25,6 +28,7 @@ LGFX_Device* display;
 M5Canvas canvas;           // ダブルバッファ用キャンバス
 M5Canvas fish_sprite_right;
 M5Canvas fish_sprite_left;
+M5Canvas fish_scaled;      // スケール変化用の一時キャンバス
 bool sprites_loaded = false;
 int screen_width = 0;
 int screen_height = 0;
@@ -89,6 +93,11 @@ void initDisplay() {
     canvas.setColorDepth(16);
     canvas.setPsram(true);  // PSRAMを使用
     canvas.createSprite(screen_width, screen_height);
+    
+    // スケール変化用の一時キャンバス
+    fish_scaled.setColorDepth(16);
+    fish_scaled.setPsram(true);
+    fish_scaled.createSprite(358, 200);
     
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
     M5_LOGI("Double buffer created");
@@ -187,6 +196,9 @@ void initFishes() {
         fish.last_direction_change = millis();
         fish.swim_phase = random(0, 628) / 100.0f;  // 0〜2πのランダム位相
         fish.swim_speed = 3.0f + random(0, 200) / 100.0f;  // 3〜5の個体差
+        fish.is_turning = false;  // 方向転換中ではない
+        fish.turn_progress = 0.0f;  // 方向転換の進行度
+        fish.turn_target_right = fish.facing_right;  // 現在の向き
         
         fishes.push_back(fish);
     }
@@ -209,7 +221,13 @@ void updateFishes(uint32_t delta_ms) {
         // 画面の端で反射
         if (fish.x < 0 || fish.x + fish.width > screen_width) {
             fish.vx = -fish.vx;
-            fish.facing_right = fish.vx > 0;
+            bool new_facing = fish.vx > 0;
+            if (new_facing != fish.facing_right && !fish.is_turning) {
+                // 方向転換アニメーションを開始
+                fish.is_turning = true;
+                fish.turn_progress = 0.0f;
+                fish.turn_target_right = new_facing;
+            }
             fish.x = constrain(fish.x, 0, screen_width - fish.width);
         }
         
@@ -231,8 +249,24 @@ void updateFishes(uint32_t delta_ms) {
                 fish.vy = (fish.vy / speed) * 2.0f;
             }
             
-            fish.facing_right = fish.vx > 0;
+            bool new_facing = fish.vx > 0;
+            if (new_facing != fish.facing_right && !fish.is_turning) {
+                // 方向転換アニメーションを開始
+                fish.is_turning = true;
+                fish.turn_progress = 0.0f;
+                fish.turn_target_right = new_facing;
+            }
             fish.last_direction_change = current_time;
+        }
+        
+        // 方向転換アニメーションの更新
+        if (fish.is_turning) {
+            fish.turn_progress += delta_sec * 3.0f;  // 約0.33秒で完了
+            if (fish.turn_progress >= 1.0f) {
+                fish.turn_progress = 1.0f;
+                fish.is_turning = false;
+                fish.facing_right = fish.turn_target_right;
+            }
         }
     }
 }
@@ -250,11 +284,34 @@ void drawScene() {
         int draw_x = (int)fish.x;
         int draw_y = (int)(fish.y + y_offset);
         
-        // 向きに応じて画像を使い分け
-        if (fish.facing_right) {
-            fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 右向きには右向き画像（頭が右）
+        if (fish.is_turning) {
+            // 方向転換アニメーション：横幅のスケール変化
+            float scale_x = 1.0f;
+            M5Canvas* source_sprite;
+            
+            if (fish.turn_progress < 0.5f) {
+                // 0.0 → 0.5: 横幅が 1.0 → 0.0 （縮小）
+                scale_x = 1.0f - (fish.turn_progress * 2.0f);
+                source_sprite = fish.facing_right ? &fish_sprite_right : &fish_sprite_left;
+            } else {
+                // 0.5 → 1.0: 横幅が 0.0 → 1.0 （拡大）
+                scale_x = (fish.turn_progress - 0.5f) * 2.0f;
+                source_sprite = fish.turn_target_right ? &fish_sprite_right : &fish_sprite_left;
+            }
+            
+            // スケール変化を適用
+            if (scale_x > 0.01f) {
+                fish_scaled.fillSprite(TFT_BLACK);
+                source_sprite->pushRotateZoom(&fish_scaled, 179, 100, 0, scale_x, 1.0f, TFT_BLACK);
+                fish_scaled.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+            }
         } else {
-            fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);  // 左向きには左向き画像（頭が左）
+            // 通常描画（スケールなし）
+            if (fish.facing_right) {
+                fish_sprite_right.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+            } else {
+                fish_sprite_left.pushSprite(&canvas, draw_x, draw_y, TFT_BLACK);
+            }
         }
     }
     
