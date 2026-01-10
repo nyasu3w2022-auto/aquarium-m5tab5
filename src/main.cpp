@@ -1,8 +1,7 @@
 #include <M5Unified.h>
 #include <M5GFX.h>
 #include <LittleFS.h>
-#include <vector>
-#antml:parameter name="cmath">
+#include <cmath>
 
 // ネオンテトラの構造体
 struct NeonTetra {
@@ -90,7 +89,7 @@ void loadFishImages() {
     File file_right = LittleFS.open("/images/neon_tetra_side_optimized.png", "r");
     if (file_right) {
         fish_sprite_right.createSprite(358, 200);
-        if (fish_sprite_right.drawPngFile(&file_right, 0, 0)) {
+        if (fish_sprite_right.drawPngFile(file_right, 0, 0)) {
             M5_LOGI("Loaded fish image (right)");
             sprites_loaded = true;
         } else {
@@ -105,7 +104,7 @@ void loadFishImages() {
     File file_left = LittleFS.open("/images/neon_tetra_left_optimized.png", "r");
     if (file_left) {
         fish_sprite_left.createSprite(358, 200);
-        if (fish_sprite_left.drawPngFile(&file_left, 0, 0)) {
+        if (fish_sprite_left.drawPngFile(file_left, 0, 0)) {
             M5_LOGI("Loaded fish image (left)");
         } else {
             M5_LOGE("Failed to draw fish image (left)");
