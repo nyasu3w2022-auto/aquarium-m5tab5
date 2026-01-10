@@ -105,10 +105,10 @@ void initDisplay() {
     // 最初に背景を一度だけ描画
     display->fillScreen(bg_color);
     
-    // ダブルバッファ用キャンバスを作成（最大サイズで確保）
-    // 魚3匹が横に並ぶ可能性を考慮
-    buffer_max_width = screen_width;  // 最大で画面幅
-    buffer_max_height = FISH_HEIGHT + 20;  // 魚の高さ + 余裕
+    // ダブルバッファ用キャンバスを作成（全画面サイズで確保）
+    // 魚がどの位置にいても対応できるように画面全体をカバー
+    buffer_max_width = screen_width;   // 画面幅
+    buffer_max_height = screen_height; // 画面高さ
     
     buffer_canvas.setColorDepth(16);
     buffer_canvas.setPsram(true);
