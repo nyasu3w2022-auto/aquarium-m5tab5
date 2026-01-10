@@ -96,6 +96,7 @@ void loadFishImages() {
             file_right.close();
             
             fish_sprite_right.createSprite(358, 200);
+            fish_sprite_right.fillSprite(TFT_BLACK);  // 背景を黒で塗りつぶし
             if (fish_sprite_right.drawPng(buffer, file_size, 0, 0)) {
                 M5_LOGI("Loaded fish image (right)");
                 sprites_loaded = true;
@@ -121,6 +122,7 @@ void loadFishImages() {
             file_left.close();
             
             fish_sprite_left.createSprite(358, 200);
+            fish_sprite_left.fillSprite(TFT_BLACK);  // 背景を黒で塗りつぶし
             if (fish_sprite_left.drawPng(buffer, file_size, 0, 0)) {
                 M5_LOGI("Loaded fish image (left)");
             } else {
@@ -228,9 +230,9 @@ void drawFishes() {
     // スプライトを使用して魚を描画
     for (const auto& fish : fishes) {
         if (fish.facing_right) {
-            fish_sprite_right.pushSprite(display, fish.x, fish.y, TFT_TRANSPARENT);
+            fish_sprite_right.pushSprite(display, fish.x, fish.y, TFT_BLACK);
         } else {
-            fish_sprite_left.pushSprite(display, fish.x, fish.y, TFT_TRANSPARENT);
+            fish_sprite_left.pushSprite(display, fish.x, fish.y, TFT_BLACK);
         }
     }
 }
