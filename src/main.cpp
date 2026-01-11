@@ -105,17 +105,16 @@ void initDisplay() {
     // 最初に背景を一度だけ描画
     display->fillScreen(bg_color);
     
-    // ダブルバッファ用キャンバスを作成（全画面サイズで確保）
-    // 魚がどの位置にいても対応できるように画面全体をカバー
+    // ダブルバッファ用キャンバスの設定（動的に作成される）
     buffer_max_width = screen_width;   // 画面幅
     buffer_max_height = screen_height; // 画面高さ
     
     buffer_canvas.setColorDepth(16);
     buffer_canvas.setPsram(true);
-    buffer_canvas.createSprite(buffer_max_width, buffer_max_height);
+    // createSpriteは最初の描画時に動的に実行される
     
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
-    M5_LOGI("Buffer canvas: %d x %d", buffer_max_width, buffer_max_height);
+    M5_LOGI("Dynamic buffer canvas enabled");
 }
 
 void loadFishImages() {
@@ -326,9 +325,19 @@ void drawScene() {
     
     if (rect_width <= 0 || rect_height <= 0) return;
     
-    // 2. バッファキャンバスの必要な領域だけに背景色を塗る
-    // 全体を塗るのではなく、矩形領域だけを塗る
-    buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
+    // 2. バッファキャンバスを矩形サイズにリサイズ（効率化）
+    // 前回とサイズが異なる場合のみ再作成
+    static int prev_rect_width = 0;
+    static int prev_rect_height = 0;
+    if (rect_width != prev_rect_width || rect_height != prev_rect_height) {
+        buffer_canvas.deleteSprite();
+        buffer_canvas.createSprite(rect_width, rect_height);
+        prev_rect_width = rect_width;
+        prev_rect_height = rect_height;
+    }
+    
+    // バッファに背景色を塗る
+    buffer_canvas.fillSprite(bg_color);
     
     // 3. バッファキャンバスに全ての魚を描画
     for (const auto& fish : fishes) {
@@ -362,10 +371,9 @@ void drawScene() {
         }
     }
     
-    // 4. バッファキャンバスの矩形領域だけを画面に転送（真の部分転送）
-    // pushImageを使って、バッファの一部だけを転送
-    display->pushImage(min_x, min_y, rect_width, rect_height, 
-                       (uint16_t*)buffer_canvas.getBuffer());
+    // 4. バッファキャンバスを画面に転送（部分転送）
+    // キャンバスは矩形サイズなので、pushSpriteでそのまま転送
+    buffer_canvas.pushSprite(display, min_x, min_y);
     
     // 5. 前回の描画位置を更新
     for (auto& fish : fishes) {
