@@ -31,8 +31,14 @@ struct NeonTetra {
 std::vector<NeonTetra> fishes;
 M5GFX gfx;
 LGFX_Device* display;
-M5Canvas fish_sprite_right;
-M5Canvas fish_sprite_left;
+
+// 5つの角度の魚画像
+M5Canvas fish_sprite_left_90;   // 左向き90度（真横）
+M5Canvas fish_sprite_left_45;   // 左向き45度
+M5Canvas fish_sprite_front;     // 正面0度
+M5Canvas fish_sprite_right_45;  // 右向き45度
+M5Canvas fish_sprite_right_90;  // 右向き90度（真横）
+
 M5Canvas buffer_canvas;  // ダブルバッファ用キャンバス
 bool sprites_loaded = false;
 int screen_width = 0;
@@ -53,6 +59,7 @@ void loadFishImages();
 void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawScene();
+M5Canvas* getFishSprite(bool facing_right, float turn_progress, bool is_turning);
 
 void setup() {
     // M5Stackの初期化
@@ -119,78 +126,77 @@ void initDisplay() {
 
 void loadFishImages() {
     // スプライトを初期化（PSRAMを使用）
-    fish_sprite_right.setColorDepth(16);
-    fish_sprite_right.setPsram(true);
-    fish_sprite_left.setColorDepth(16);
-    fish_sprite_left.setPsram(true);
+    fish_sprite_left_90.setColorDepth(16);
+    fish_sprite_left_90.setPsram(true);
+    fish_sprite_left_45.setColorDepth(16);
+    fish_sprite_left_45.setPsram(true);
+    fish_sprite_front.setColorDepth(16);
+    fish_sprite_front.setPsram(true);
+    fish_sprite_right_45.setColorDepth(16);
+    fish_sprite_right_45.setPsram(true);
+    fish_sprite_right_90.setColorDepth(16);
+    fish_sprite_right_90.setPsram(true);
     
-    // 右向きの魚の画像を読み込み
-    File file_right = LittleFS.open("/images/neon_tetra_right_optimized.png", "r");
-    if (file_right) {
-        size_t file_size = file_right.size();
-        uint8_t* buffer = (uint8_t*)malloc(file_size);
-        if (buffer) {
-            file_right.readBytes((char*)buffer, file_size);
-            file_right.close();
-            
-            fish_sprite_right.createSprite(FISH_WIDTH, FISH_HEIGHT);
-            fish_sprite_right.fillSprite(TFT_BLACK);
-            if (fish_sprite_right.drawPng(buffer, file_size, 0, 0)) {
-                M5_LOGI("Loaded fish image (right)");
-                sprites_loaded = true;
-            } else {
-                M5_LOGE("Failed to draw fish image (right)");
-            }
-            free(buffer);
-        } else {
-            M5_LOGE("Memory allocation failed (right)");
-            file_right.close();
-        }
-    } else {
-        M5_LOGE("Failed to open fish image file (right)");
-    }
+    // 画像ファイルのリスト
+    struct ImageInfo {
+        const char* path;
+        M5Canvas* canvas;
+        const char* name;
+    };
     
-    // 左向きの魚の画像を読み込み
-    File file_left = LittleFS.open("/images/neon_tetra_left_optimized.png", "r");
-    if (file_left) {
-        size_t file_size = file_left.size();
-        uint8_t* buffer = (uint8_t*)malloc(file_size);
-        if (buffer) {
-            file_left.readBytes((char*)buffer, file_size);
-            file_left.close();
-            
-            fish_sprite_left.createSprite(FISH_WIDTH, FISH_HEIGHT);
-            fish_sprite_left.fillSprite(TFT_BLACK);
-            if (fish_sprite_left.drawPng(buffer, file_size, 0, 0)) {
-                M5_LOGI("Loaded fish image (left)");
+    ImageInfo images[] = {
+        {"/images/neon_tetra_left_optimized.png", &fish_sprite_left_90, "left_90"},
+        {"/images/neon_tetra_45left_optimized.png", &fish_sprite_left_45, "left_45"},
+        {"/images/neon_tetra_front_optimized.png", &fish_sprite_front, "front"},
+        {"/images/neon_tetra_45right_optimized.png", &fish_sprite_right_45, "right_45"},
+        {"/images/neon_tetra_right_optimized.png", &fish_sprite_right_90, "right_90"}
+    };
+    
+    // 各画像を読み込み
+    for (const auto& img : images) {
+        File file = LittleFS.open(img.path, "r");
+        if (file) {
+            size_t file_size = file.size();
+            uint8_t* buffer = (uint8_t*)malloc(file_size);
+            if (buffer) {
+                file.readBytes((char*)buffer, file_size);
+                file.close();
+                
+                img.canvas->createSprite(FISH_WIDTH, FISH_HEIGHT);
+                img.canvas->fillSprite(TFT_BLACK);
+                if (img.canvas->drawPng(buffer, file_size, 0, 0)) {
+                    M5_LOGI("Loaded fish image: %s", img.name);
+                    sprites_loaded = true;
+                } else {
+                    M5_LOGE("Failed to draw fish image: %s", img.name);
+                }
+                free(buffer);
             } else {
-                M5_LOGE("Failed to draw fish image (left)");
+                M5_LOGE("Memory allocation failed: %s", img.name);
+                file.close();
             }
-            free(buffer);
         } else {
-            M5_LOGE("Memory allocation failed (left)");
-            file_left.close();
+            M5_LOGE("Failed to open fish image file: %s", img.path);
         }
-    } else {
-        M5_LOGE("Failed to open fish image file (left)");
     }
     
     // 画像の読み込みに失敗した場合のフォールバック
     if (!sprites_loaded) {
         M5_LOGW("Using fallback graphics");
-        fish_sprite_right.createSprite(FISH_WIDTH, FISH_HEIGHT);
-        fish_sprite_right.fillSprite(TFT_BLACK);
-        fish_sprite_right.fillEllipse(179, 100, 120, 60, TFT_CYAN);
-        fish_sprite_right.fillEllipse(240, 100, 80, 40, TFT_RED);
-        fish_sprite_right.fillCircle(140, 90, 8, TFT_WHITE);
-        fish_sprite_right.fillCircle(140, 90, 4, TFT_BLACK);
+        // 簡易的な魚の形を描画
+        fish_sprite_right_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
+        fish_sprite_right_90.fillSprite(TFT_BLACK);
+        fish_sprite_right_90.fillEllipse(179, 100, 120, 60, TFT_CYAN);
+        fish_sprite_right_90.fillEllipse(240, 100, 80, 40, TFT_RED);
+        fish_sprite_right_90.fillCircle(140, 90, 8, TFT_WHITE);
+        fish_sprite_right_90.fillCircle(140, 90, 4, TFT_BLACK);
         
-        fish_sprite_left.createSprite(FISH_WIDTH, FISH_HEIGHT);
-        fish_sprite_left.fillSprite(TFT_BLACK);
-        fish_sprite_left.fillEllipse(179, 100, 120, 60, TFT_CYAN);
-        fish_sprite_left.fillEllipse(118, 100, 80, 40, TFT_RED);
-        fish_sprite_left.fillCircle(218, 90, 8, TFT_WHITE);
-        fish_sprite_left.fillCircle(218, 90, 4, TFT_BLACK);
+        fish_sprite_left_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
+        fish_sprite_left_90.fillSprite(TFT_BLACK);
+        fish_sprite_left_90.fillEllipse(179, 100, 120, 60, TFT_CYAN);
+        fish_sprite_left_90.fillEllipse(118, 100, 80, 40, TFT_RED);
+        fish_sprite_left_90.fillCircle(218, 90, 8, TFT_WHITE);
+        fish_sprite_left_90.fillCircle(218, 90, 4, TFT_BLACK);
     }
 }
 
@@ -274,7 +280,7 @@ void updateFishes(uint32_t delta_ms) {
         
         // 方向転換アニメーションの更新
         if (fish.is_turning) {
-            fish.turn_progress += delta_sec * 1.0f;
+            fish.turn_progress += delta_sec * 1.0f;  // 約1秒で完了
             if (fish.turn_progress >= 1.0f) {
                 fish.turn_progress = 1.0f;
                 fish.is_turning = false;
@@ -286,6 +292,42 @@ void updateFishes(uint32_t delta_ms) {
         float y_offset = sin(fish.swim_phase) * 5.0f;
         fish.curr_draw_x = (int)fish.x;
         fish.curr_draw_y = (int)(fish.y + y_offset);
+    }
+}
+
+// 方向転換の進行度に応じて適切な魚の画像を返す
+M5Canvas* getFishSprite(bool facing_right, float turn_progress, bool is_turning) {
+    if (!is_turning) {
+        // 方向転換していない場合は真横の画像
+        return facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+    }
+    
+    // 方向転換中：5段階の画像を使用
+    // 0.0 → 0.25 → 0.5 → 0.75 → 1.0
+    // 左90 → 左45 → 正面 → 右45 → 右90
+    
+    if (!facing_right) {
+        // 左向き → 右向きへの転換
+        if (turn_progress < 0.25f) {
+            return &fish_sprite_left_90;
+        } else if (turn_progress < 0.5f) {
+            return &fish_sprite_left_45;
+        } else if (turn_progress < 0.75f) {
+            return &fish_sprite_front;
+        } else {
+            return &fish_sprite_right_45;
+        }
+    } else {
+        // 右向き → 左向きへの転換
+        if (turn_progress < 0.25f) {
+            return &fish_sprite_right_90;
+        } else if (turn_progress < 0.5f) {
+            return &fish_sprite_right_45;
+        } else if (turn_progress < 0.75f) {
+            return &fish_sprite_front;
+        } else {
+            return &fish_sprite_left_45;
+        }
     }
 }
 
@@ -345,30 +387,11 @@ void drawScene() {
         int rel_x = fish.curr_draw_x - min_x;
         int rel_y = fish.curr_draw_y - min_y;
         
-        if (fish.is_turning) {
-            float scale_x = 1.0f;
-            M5Canvas* source_sprite;
-            
-            if (fish.turn_progress < 0.5f) {
-                scale_x = 1.0f - (fish.turn_progress * 2.0f);
-                source_sprite = fish.facing_right ? &fish_sprite_right : &fish_sprite_left;
-            } else {
-                scale_x = (fish.turn_progress - 0.5f) * 2.0f;
-                source_sprite = fish.turn_target_right ? &fish_sprite_right : &fish_sprite_left;
-            }
-            
-            if (scale_x > 0.05f) {
-                int center_x = rel_x + FISH_WIDTH / 2;
-                int center_y = rel_y + FISH_HEIGHT / 2;
-                source_sprite->pushRotateZoom(&buffer_canvas, center_x, center_y, 0, scale_x, 1.0f, TFT_BLACK);
-            }
-        } else {
-            if (fish.facing_right) {
-                fish_sprite_right.pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
-            } else {
-                fish_sprite_left.pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
-            }
-        }
+        // 適切な角度の画像を取得
+        M5Canvas* sprite = getFishSprite(fish.facing_right, fish.turn_progress, fish.is_turning);
+        
+        // 魚を描画
+        sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
     }
     
     // 4. バッファキャンバスを画面に転送（部分転送）
