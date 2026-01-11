@@ -4,19 +4,21 @@ M5Stack TAB5上で動作するネオンテトラ飼育シミュレーション�
 
 ## 概要
 
-このプロジェクトは、M5Stack TAB5のタッチスクリーン上にリアルなネオンテトラが泳ぐシミュレーションを実装しています。
+このプロジェクトは、M5Stack TAB5の5インチタッチスクリーン（1280×720）上にリアルなネオンテトラが泳ぐシミュレーションを実装しています。
 
 ## 機能
 
-- **リアルな魚のアニメーション**: ネオンテトラが自然な泳ぎ方で画面内を移動
+- **リアルな魚のアニメーション**: AI生成されたネオンテトラ画像（358×200px）を使用
 - **複数の魚**: 3匹のネオンテトラが同時に泳ぐ
 - **物理シミュレーション**: 速度、加速度、画面端での反射を実装
-- **ランダムな行動**: 魚がランダムに方向を変更
-- **水色のグラデーション背景**: 水中環境を表現
+- **スムーズな方向転換**: 横方向のスケール変換による自然な方向転換アニメーション
+- **泳ぎのアニメーション**: sin波による上下の揺れで泳ぎを表現
+- **ランダムな行動**: 魚がランダムに方向を変更（3〜8秒間隔）
+- **最適化された描画**: 動的リサイズバッファによる部分転送で高速描画
 
 ## ハードウェア要件
 
-- M5Stack TAB5
+- M5Stack TAB5（ESP32-P4搭載）
 - USB-Cケーブル（プログラム書き込み用）
 
 ## セットアップ
@@ -30,7 +32,8 @@ pip install platformio
 ### 2. プロジェクトのクローン
 
 ```bash
-cd aquazone_m5tab5
+git clone https://github.com/nyasu3w2022-auto/aquarium-m5tab5.git
+cd aquarium-m5tab5
 ```
 
 ### 3. 依存ライブラリのインストール
@@ -39,7 +42,13 @@ cd aquazone_m5tab5
 platformio lib install
 ```
 
-### 4. M5Stack TAB5への書き込み
+### 4. 画像ファイルのアップロード
+
+```bash
+platformio run --target uploadfs
+```
+
+### 5. M5Stack TAB5への書き込み
 
 ```bash
 platformio run --target upload
@@ -48,14 +57,14 @@ platformio run --target upload
 ## ファイル構成
 
 ```
-aquazone_m5tab5/
+aquarium-m5tab5/
 ├── platformio.ini           # PlatformIO設定ファイル
 ├── src/
 │   └── main.cpp            # メインプログラム
 ├── data/
 │   └── images/
-│       ├── neon_tetra_side_optimized.png    # 右向きのネオンテトラ
-│       └── neon_tetra_left_optimized.png    # 左向きのネオンテトラ
+│       ├── neon_tetra_right_optimized.png    # 右向きのネオンテトラ（358×200px）
+│       └── neon_tetra_left_optimized.png     # 左向きのネオンテトラ（358×200px）
 └── README.md               # このファイル
 ```
 
@@ -70,28 +79,58 @@ struct NeonTetra {
     float vx;                   // X方向の速度
     float vy;                   // Y方向の速度
     bool facing_right;          // 右向きか左向きか
-    int width;                  // 画像幅
-    int height;                 // 画像高さ
+    int width;                  // 画像幅（358px）
+    int height;                 // 画像高さ（200px）
     uint32_t last_direction_change;  // 最後に方向が変わった時刻
+    float swim_phase;           // 泳ぎのアニメーション位相
+    float swim_speed;           // 泳ぎの速度（個体差）
+    bool is_turning;            // 方向転換中かどうか
+    float turn_progress;        // 方向転換の進行度（0.0〜1.0）
+    bool turn_target_right;     // 方向転換後の向き
+    int prev_draw_x;            // 前回の描画位置X
+    int prev_draw_y;            // 前回の描画位置Y
+    int curr_draw_x;            // 今回の描画位置X
+    int curr_draw_y;            // 今回の描画位置Y
 };
 ```
 
 ### 主要な関数
 
-- `initDisplay()`: ディスプレイの初期化
-- `loadFishImages()`: 魚の画像をSPIFFSから読み込み
-- `initFishes()`: 魚を初期化
-- `updateFishes()`: 魚の位置と速度を更新
-- `drawFishes()`: 魚を描画
+- `initDisplay()`: ディスプレイの初期化（横向き、1280×720）
+- `loadFishImages()`: 魚の画像をLittleFSから読み込み
+- `initFishes()`: 魚を初期化（3匹、ランダムな位置と速度）
+- `updateFishes()`: 魚の位置と速度を更新（物理シミュレーション）
+- `drawScene()`: 最小矩形ダブルバッファで魚を描画
+
+### 描画最適化
+
+**動的リサイズバッファ方式：**
+
+1. 全魚の前回位置と今回位置を含む最小矩形を計算
+2. バッファキャンバスを矩形サイズにリサイズ（サイズ変更時のみ）
+3. バッファに背景色と魚を描画
+4. バッファを画面の矩形位置に転送
+
+この方式により、全画面転送（約1.8MB/フレーム）と比較して、魚が近くにいる場合は約76%のデータ転送量削減を実現しています。
+
+### 技術仕様
+
+| 項目 | 仕様 |
+|------|------|
+| プラットフォーム | ESP32-P4（M5Stack TAB5） |
+| ディスプレイ | 5インチ、1280×720、横向き |
+| ファイルシステム | LittleFS |
+| ライブラリ | M5Unified、M5GFX |
+| 画像フォーマット | PNG（透過あり） |
+| メモリ | PSRAM使用（スプライト、バッファ） |
 
 ## 今後の拡張予定
 
 - [ ] タッチ入力による魚への給餌機能
-- [ ] 水質管理システム
+- [ ] 魚の数を動的に変更
 - [ ] 複数の魚種の追加
-- [ ] セーブ・ロード機能
-- [ ] 吹き出しメッセージシステム
-- [ ] SDカードへのエキスポート・インポート機能
+- [ ] 背景のバリエーション（水草、岩など）
+- [ ] FPSカウンター表示
 
 ## トラブルシューティング
 
@@ -103,9 +142,15 @@ struct NeonTetra {
 
 ### M5Stack TAB5が認識されない場合
 
-1. USB-Cケーブルが正しく接続されているか確認
+1. USB-Cケーブルが正しく接続されているか確認（データ転送対応ケーブルを使用）
 2. ドライバがインストールされているか確認
 3. 別のUSBポートを試す
+
+### 画像が表示されない場合
+
+1. `platformio run --target uploadfs` で画像ファイルをアップロードしたか確認
+2. LittleFSが正しく初期化されているか確認（シリアルモニタでログを確認）
+3. 画像ファイルが `data/images/` ディレクトリに存在するか確認
 
 ## ライセンス
 
@@ -114,3 +159,7 @@ MIT License
 ## 作成者
 
 Manus AI Assistant
+
+## リポジトリ
+
+https://github.com/nyasu3w2022-auto/aquarium-m5tab5
