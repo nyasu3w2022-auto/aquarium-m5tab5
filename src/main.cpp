@@ -125,16 +125,16 @@ void initDisplay() {
 }
 
 void loadFishImages() {
-    // スプライトを初期化（PSRAMを使用）
-    fish_sprite_left_90.setColorDepth(16);
+    // スプライトを初期化（PSRAMを使用、32bit深度で透過対応）
+    fish_sprite_left_90.setColorDepth(32);  // 32bitでアルファチャンネル対応
     fish_sprite_left_90.setPsram(true);
-    fish_sprite_left_45.setColorDepth(16);
+    fish_sprite_left_45.setColorDepth(32);
     fish_sprite_left_45.setPsram(true);
-    fish_sprite_front.setColorDepth(16);
+    fish_sprite_front.setColorDepth(32);
     fish_sprite_front.setPsram(true);
-    fish_sprite_right_45.setColorDepth(16);
+    fish_sprite_right_45.setColorDepth(32);
     fish_sprite_right_45.setPsram(true);
-    fish_sprite_right_90.setColorDepth(16);
+    fish_sprite_right_90.setColorDepth(32);
     fish_sprite_right_90.setPsram(true);
     
     // 画像ファイルのリスト
@@ -163,7 +163,7 @@ void loadFishImages() {
                 file.close();
                 
                 img.canvas->createSprite(FISH_WIDTH, FISH_HEIGHT);
-                img.canvas->fillSprite(TFT_BLACK);
+                img.canvas->clear();  // 透明にクリア
                 if (img.canvas->drawPng(buffer, file_size, 0, 0)) {
                     M5_LOGI("Loaded fish image: %s", img.name);
                     sprites_loaded = true;
@@ -390,8 +390,8 @@ void drawScene() {
         // 適切な角度の画像を取得
         M5Canvas* sprite = getFishSprite(fish.facing_right, fish.turn_progress, fish.is_turning);
         
-        // 魚を描画
-        sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
+        // 魚を描画（透過あり）
+        sprite->pushSprite(&buffer_canvas, rel_x, rel_y);
     }
     
     // 4. バッファキャンバスを画面に転送（部分転送）
