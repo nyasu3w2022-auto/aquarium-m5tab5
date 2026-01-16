@@ -14,7 +14,7 @@ struct NeonTetra {
     int width;         // 画像幅
     int height;        // 画像高さ
     uint32_t last_direction_change; // 最後に方向が変わった時刻
-    float swim_phase;  // 泳ぎのアニメーション位相
+    float swim_phase;  // 泳ぎのアニメーション位相（0.0〜6.0）
     float swim_speed;  // 泳ぎの速度（個体差）
     bool is_turning;   // 方向転換中かどうか
     float turn_progress; // 方向転換の進行度（0.0〜1.0）
@@ -32,8 +32,16 @@ std::vector<NeonTetra> fishes;
 M5GFX gfx;
 LGFX_Device* display;
 
-// 10段階の角度の魚画像（左向き0度〜右向き180度）
-M5Canvas fish_sprites[10];
+// 泳ぎアニメーション用の魚画像（左6フレーム + 右6フレーム）
+M5Canvas fish_sprites_left[6];
+M5Canvas fish_sprites_right[6];
+
+// 方向転換用の画像（既存の5枚）
+M5Canvas fish_sprite_left_90;
+M5Canvas fish_sprite_left_45;
+M5Canvas fish_sprite_front;
+M5Canvas fish_sprite_right_45;
+M5Canvas fish_sprite_right_90;
 
 M5Canvas buffer_canvas;  // ダブルバッファ用キャンバス
 bool sprites_loaded = false;
@@ -55,7 +63,7 @@ void loadFishImages();
 void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawScene();
-int getFishSpriteIndex(bool facing_right, float turn_progress, bool is_turning);
+M5Canvas* getFishSprite(const NeonTetra& fish);
 
 void setup() {
     // M5Stackの初期化
@@ -101,42 +109,90 @@ void initDisplay() {
     screen_width = display->width();
     screen_height = display->height();
     
+    // 背景色を設定（水色）
+    bg_color = display->color565(30, 144, 255);  // DodgerBlue
+    
+    // 背景を塗りつぶし
+    display->fillScreen(bg_color);
+    
+    // ダブルバッファの最大サイズを設定
+    buffer_max_width = screen_width;
+    buffer_max_height = screen_height;
+    
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
     M5_LOGI("Dynamic buffer canvas enabled");
-    
-    // 背景色を設定（濃い青）
-    bg_color = display->color565(0, 102, 204);
-    
-    // 背景を一度だけ塗る
-    display->fillScreen(bg_color);
 }
 
 void loadFishImages() {
-    // 10段階の角度画像を読み込み
-    const char* angle_files[10] = {
-        "/images/angles/neon_tetra_angle_000_optimized.png",  // 0度（左向き真横）
-        "/images/angles/neon_tetra_angle_020_optimized.png",  // 20度
-        "/images/angles/neon_tetra_angle_040_optimized.png",  // 40度
-        "/images/angles/neon_tetra_angle_060_optimized.png",  // 60度
-        "/images/angles/neon_tetra_angle_090_optimized.png",  // 90度（正面）
-        "/images/angles/neon_tetra_angle_100_optimized.png",  // 100度
-        "/images/angles/neon_tetra_angle_120_optimized.png",  // 120度
-        "/images/angles/neon_tetra_angle_140_optimized.png",  // 140度
-        "/images/angles/neon_tetra_angle_160_optimized.png",  // 160度
-        "/images/angles/neon_tetra_angle_180_optimized.png"   // 180度（右向き真横）
+    // 左向き泳ぎアニメーション（6フレーム）
+    const char* left_swim_files[6] = {
+        "/images/swim/neon_tetra_left_swim1_optimized.png",
+        "/images/swim/neon_tetra_left_swim2_optimized.png",
+        "/images/swim/neon_tetra_left_swim3_optimized.png",
+        "/images/swim/neon_tetra_left_swim4_optimized.png",
+        "/images/swim/neon_tetra_left_swim5_optimized.png",
+        "/images/swim/neon_tetra_left_swim6_optimized.png"
     };
     
-    for (int i = 0; i < 10; i++) {
-        fish_sprites[i].setColorDepth(16);
-        fish_sprites[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
-        fish_sprites[i].fillSprite(TFT_BLACK);
+    for (int i = 0; i < 6; i++) {
+        fish_sprites_left[i].setColorDepth(16);
+        fish_sprites_left[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
+        fish_sprites_left[i].fillSprite(TFT_BLACK);
         
-        if (fish_sprites[i].drawPngFile(LittleFS, angle_files[i])) {
-            M5_LOGI("Loaded: %s", angle_files[i]);
+        if (fish_sprites_left[i].drawPngFile(LittleFS, left_swim_files[i])) {
+            M5_LOGI("Loaded: %s", left_swim_files[i]);
         } else {
-            M5_LOGE("Failed to load: %s", angle_files[i]);
+            M5_LOGE("Failed to load: %s", left_swim_files[i]);
         }
     }
+    
+    // 右向き泳ぎアニメーション（6フレーム）
+    const char* right_swim_files[6] = {
+        "/images/swim/neon_tetra_right_swim1_optimized.png",
+        "/images/swim/neon_tetra_right_swim2_optimized.png",
+        "/images/swim/neon_tetra_right_swim3_optimized.png",
+        "/images/swim/neon_tetra_right_swim4_optimized.png",
+        "/images/swim/neon_tetra_right_swim5_optimized.png",
+        "/images/swim/neon_tetra_right_swim6_optimized.png"
+    };
+    
+    for (int i = 0; i < 6; i++) {
+        fish_sprites_right[i].setColorDepth(16);
+        fish_sprites_right[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
+        fish_sprites_right[i].fillSprite(TFT_BLACK);
+        
+        if (fish_sprites_right[i].drawPngFile(LittleFS, right_swim_files[i])) {
+            M5_LOGI("Loaded: %s", right_swim_files[i]);
+        } else {
+            M5_LOGE("Failed to load: %s", right_swim_files[i]);
+        }
+    }
+    
+    // 方向転換用の画像（既存の5枚）
+    fish_sprite_left_90.setColorDepth(16);
+    fish_sprite_left_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
+    fish_sprite_left_90.fillSprite(TFT_BLACK);
+    fish_sprite_left_90.drawPngFile(LittleFS, "/images/neon_tetra_left_optimized.png");
+    
+    fish_sprite_left_45.setColorDepth(16);
+    fish_sprite_left_45.createSprite(FISH_WIDTH, FISH_HEIGHT);
+    fish_sprite_left_45.fillSprite(TFT_BLACK);
+    fish_sprite_left_45.drawPngFile(LittleFS, "/images/neon_tetra_45left_optimized.png");
+    
+    fish_sprite_front.setColorDepth(16);
+    fish_sprite_front.createSprite(FISH_WIDTH, FISH_HEIGHT);
+    fish_sprite_front.fillSprite(TFT_BLACK);
+    fish_sprite_front.drawPngFile(LittleFS, "/images/neon_tetra_front_optimized.png");
+    
+    fish_sprite_right_45.setColorDepth(16);
+    fish_sprite_right_45.createSprite(FISH_WIDTH, FISH_HEIGHT);
+    fish_sprite_right_45.fillSprite(TFT_BLACK);
+    fish_sprite_right_45.drawPngFile(LittleFS, "/images/neon_tetra_45right_optimized.png");
+    
+    fish_sprite_right_90.setColorDepth(16);
+    fish_sprite_right_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
+    fish_sprite_right_90.fillSprite(TFT_BLACK);
+    fish_sprite_right_90.drawPngFile(LittleFS, "/images/neon_tetra_right_optimized.png");
     
     sprites_loaded = true;
 }
@@ -153,7 +209,7 @@ void initFishes() {
         fish.width = FISH_WIDTH;
         fish.height = FISH_HEIGHT;
         fish.last_direction_change = millis();
-        fish.swim_phase = random(0, 314) / 100.0f;  // 0〜3.14
+        fish.swim_phase = random(0, 600) / 100.0f;  // 0〜6.0
         fish.swim_speed = random(80, 120) / 100.0f;  // 0.8〜1.2
         fish.is_turning = false;
         fish.turn_progress = 0.0f;
@@ -178,6 +234,12 @@ void updateFishes(uint32_t delta_ms) {
                 fish.is_turning = false;
                 fish.facing_right = fish.turn_target_right;
             }
+        } else {
+            // 泳ぎアニメーションの位相を更新（0.0〜6.0の範囲で循環）
+            fish.swim_phase += delta_sec * 6.0f * fish.swim_speed;  // 1秒で1サイクル
+            if (fish.swim_phase >= 6.0f) {
+                fish.swim_phase -= 6.0f;
+            }
         }
         
         // 位置を更新
@@ -185,63 +247,69 @@ void updateFishes(uint32_t delta_ms) {
         fish.y += fish.vy * delta_sec * 50;
         
         // 画面端での反射
-        if (fish.x < 0) {
-            fish.x = 0;
+        if (fish.x < 0 || fish.x + fish.width > screen_width) {
             fish.vx = -fish.vx;
-            if (!fish.is_turning && fish.vx > 0 && !fish.facing_right) {
+            fish.x = constrain(fish.x, 0, screen_width - fish.width);
+            
+            // 方向転換開始
+            if (!fish.is_turning) {
                 fish.is_turning = true;
                 fish.turn_progress = 0.0f;
-                fish.turn_target_right = true;
-            }
-        }
-        if (fish.x + fish.width > screen_width) {
-            fish.x = screen_width - fish.width;
-            fish.vx = -fish.vx;
-            if (!fish.is_turning && fish.vx < 0 && fish.facing_right) {
-                fish.is_turning = true;
-                fish.turn_progress = 0.0f;
-                fish.turn_target_right = false;
-            }
-        }
-        if (fish.y < 0) {
-            fish.y = 0;
-            fish.vy = -fish.vy;
-        }
-        if (fish.y + fish.height > screen_height) {
-            fish.y = screen_height - fish.height;
-            fish.vy = -fish.vy;
-        }
-        
-        // ランダムに速度を変更
-        if (millis() - fish.last_direction_change > 2000) {
-            if (random(0, 100) < 5) {  // 5%の確率
-                fish.vx += (random(0, 200) - 100) / 100.0f;
-                fish.vy += (random(0, 200) - 100) / 100.0f;
-                
-                // 速度を制限
-                float speed = sqrt(fish.vx * fish.vx + fish.vy * fish.vy);
-                if (speed > 2.0f) {
-                    fish.vx = fish.vx / speed * 2.0f;
-                    fish.vy = fish.vy / speed * 2.0f;
-                }
-                
-                // 方向転換が必要か判定
-                bool should_face_right = fish.vx > 0;
-                if (!fish.is_turning && should_face_right != fish.facing_right) {
-                    fish.is_turning = true;
-                    fish.turn_progress = 0.0f;
-                    fish.turn_target_right = should_face_right;
-                }
-                
-                fish.last_direction_change = millis();
+                fish.turn_target_right = fish.vx > 0;
             }
         }
         
-        // 泳ぎのアニメーション位相を更新
-        fish.swim_phase += delta_sec * 3.14f * fish.swim_speed;
-        if (fish.swim_phase > 6.28f) {
-            fish.swim_phase -= 6.28f;
+        if (fish.y < 0 || fish.y + fish.height > screen_height) {
+            fish.vy = -fish.vy;
+            fish.y = constrain(fish.y, 0, screen_height - fish.height);
         }
+        
+        // ランダムな速度変更（ごくまれに）
+        if (random(0, 1000) < 10) {
+            fish.vx += (random(0, 200) - 100) / 100.0f;
+            fish.vy += (random(0, 200) - 100) / 100.0f;
+            
+            // 速度制限
+            float speed = sqrt(fish.vx * fish.vx + fish.vy * fish.vy);
+            if (speed > 2.0f) {
+                fish.vx = fish.vx / speed * 2.0f;
+                fish.vy = fish.vy / speed * 2.0f;
+            }
+        }
+        
+        // 今回の描画位置を計算
+        fish.curr_draw_x = (int)fish.x;
+        fish.curr_draw_y = (int)fish.y;
+    }
+}
+
+M5Canvas* getFishSprite(const NeonTetra& fish) {
+    // 方向転換中は方向転換用の画像を使用
+    if (fish.is_turning) {
+        if (fish.turn_progress < 0.25f) {
+            // 最初の25%: 真横
+            return fish.turn_target_right ? &fish_sprite_left_90 : &fish_sprite_right_90;
+        } else if (fish.turn_progress < 0.5f) {
+            // 25〜50%: 斜め45度
+            return fish.turn_target_right ? &fish_sprite_left_45 : &fish_sprite_right_45;
+        } else if (fish.turn_progress < 0.75f) {
+            // 50〜75%: 正面
+            return &fish_sprite_front;
+        } else {
+            // 75〜100%: 反対側の斜め45度
+            return fish.turn_target_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
+        }
+    }
+    
+    // 通常の泳ぎアニメーション（6フレーム）
+    int frame_index = (int)fish.swim_phase;  // 0〜5
+    if (frame_index < 0) frame_index = 0;
+    if (frame_index > 5) frame_index = 5;
+    
+    if (fish.facing_right) {
+        return &fish_sprites_right[frame_index];
+    } else {
+        return &fish_sprites_left[frame_index];
     }
 }
 
@@ -254,17 +322,14 @@ void drawScene() {
     int min_y = screen_height;
     int max_y = 0;
     
-    for (auto& fish : fishes) {
-        fish.curr_draw_x = (int)fish.x;
-        fish.curr_draw_y = (int)fish.y;
-        
-        // 前回の位置を含める
+    for (const auto& fish : fishes) {
+        // 前回の位置
         min_x = min(min_x, fish.prev_draw_x);
         max_x = max(max_x, fish.prev_draw_x + FISH_WIDTH);
         min_y = min(min_y, fish.prev_draw_y);
         max_y = max(max_y, fish.prev_draw_y + FISH_HEIGHT);
         
-        // 今回の位置を含める
+        // 今回の位置
         min_x = min(min_x, fish.curr_draw_x);
         max_x = max(max_x, fish.curr_draw_x + FISH_WIDTH);
         min_y = min(min_y, fish.curr_draw_y);
@@ -275,7 +340,15 @@ void drawScene() {
     int rect_width = max_x - min_x;
     int rect_height = max_y - min_y;
     
-    // バッファをリサイズ（サイズが変わった場合のみ）
+    // 画面外にはみ出さないようにクリップ
+    if (min_x < 0) min_x = 0;
+    if (min_y < 0) min_y = 0;
+    if (max_x > screen_width) max_x = screen_width;
+    if (max_y > screen_height) max_y = screen_height;
+    rect_width = max_x - min_x;
+    rect_height = max_y - min_y;
+    
+    // バッファのサイズが変わった場合のみリサイズ
     static int prev_rect_width = 0;
     static int prev_rect_height = 0;
     if (rect_width != prev_rect_width || rect_height != prev_rect_height) {
@@ -284,6 +357,7 @@ void drawScene() {
         buffer_canvas.createSprite(rect_width, rect_height);
         prev_rect_width = rect_width;
         prev_rect_height = rect_height;
+        M5_LOGI("Buffer resized: %d x %d", rect_width, rect_height);
     }
     
     // バッファに背景色を塗る
@@ -291,49 +365,23 @@ void drawScene() {
     
     // バッファに全ての魚を描画
     for (const auto& fish : fishes) {
+        // バッファ内の相対位置を計算
         int rel_x = fish.curr_draw_x - min_x;
         int rel_y = fish.curr_draw_y - min_y;
         
-        // 適切な角度の画像を選択
-        int sprite_index = getFishSpriteIndex(fish.facing_right, fish.turn_progress, fish.is_turning);
+        // 適切なフレームの画像を取得
+        M5Canvas* sprite = getFishSprite(fish);
         
-        // 魚を描画（黒を透過）
-        fish_sprites[sprite_index].pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
+        // 魚を描画（緑色を透過）
+        sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_GREEN);
     }
     
     // バッファを画面に転送
     buffer_canvas.pushSprite(display, min_x, min_y);
     
-    // 前回位置を更新
+    // 前回の描画位置を更新
     for (auto& fish : fishes) {
         fish.prev_draw_x = fish.curr_draw_x;
         fish.prev_draw_y = fish.curr_draw_y;
     }
-}
-
-int getFishSpriteIndex(bool facing_right, float turn_progress, bool is_turning) {
-    if (!is_turning) {
-        // 方向転換していない場合
-        return facing_right ? 9 : 0;  // 右向き真横 or 左向き真横
-    }
-    
-    // 方向転換中：進行度に応じて10段階の画像を選択
-    // 左向き→右向き: 0→1→2→3→4→5→6→7→8→9
-    // 右向き→左向き: 9→8→7→6→5→4→3→2→1→0
-    
-    float angle_progress;
-    if (facing_right) {
-        // 現在左向き、右向きに転換中
-        angle_progress = turn_progress;
-    } else {
-        // 現在右向き、左向きに転換中
-        angle_progress = 1.0f - turn_progress;
-    }
-    
-    // 0.0〜1.0を0〜9のインデックスに変換
-    int index = (int)(angle_progress * 9.0f);
-    if (index > 9) index = 9;
-    if (index < 0) index = 0;
-    
-    return index;
 }
