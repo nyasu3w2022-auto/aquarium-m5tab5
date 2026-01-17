@@ -1,5 +1,4 @@
 #include <M5Unified.h>
-#include <M5GFX.h>
 #include <LittleFS.h>
 #include <vector>
 #include <cmath>
@@ -29,7 +28,6 @@ struct NeonTetra {
 
 // グローバル変数
 std::vector<NeonTetra> fishes;
-M5GFX gfx;
 LGFX_Device* display;
 
 // 泳ぎアニメーション用の魚画像（左6フレーム + 右6フレーム）
@@ -137,13 +135,11 @@ void loadFishImages() {
     for (int i = 0; i < 6; i++) {
         fish_sprites_left[i].setColorDepth(16);
         fish_sprites_left[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
-        fish_sprites_left[i].fillSprite(TFT_BLACK);
+        fish_sprites_left[i].fillSprite(TFT_GREEN);
         
-        if (fish_sprites_left[i].drawPngFile(LittleFS, left_swim_files[i])) {
-            M5_LOGI("Loaded: %s", left_swim_files[i]);
-        } else {
-            M5_LOGE("Failed to load: %s", left_swim_files[i]);
-        }
+        M5.Display.drawPngFile(LittleFS, left_swim_files[i], 0, 0);
+        fish_sprites_left[i].pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+        M5_LOGI("Loaded: %s", left_swim_files[i]);
     }
     
     // 右向き泳ぎアニメーション（6フレーム）
@@ -159,40 +155,43 @@ void loadFishImages() {
     for (int i = 0; i < 6; i++) {
         fish_sprites_right[i].setColorDepth(16);
         fish_sprites_right[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
-        fish_sprites_right[i].fillSprite(TFT_BLACK);
+        fish_sprites_right[i].fillSprite(TFT_GREEN);
         
-        if (fish_sprites_right[i].drawPngFile(LittleFS, right_swim_files[i])) {
-            M5_LOGI("Loaded: %s", right_swim_files[i]);
-        } else {
-            M5_LOGE("Failed to load: %s", right_swim_files[i]);
-        }
+        M5.Display.drawPngFile(LittleFS, right_swim_files[i], 0, 0);
+        fish_sprites_right[i].pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+        M5_LOGI("Loaded: %s", right_swim_files[i]);
     }
     
     // 方向転換用の画像（既存の5枚）
     fish_sprite_left_90.setColorDepth(16);
     fish_sprite_left_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
-    fish_sprite_left_90.fillSprite(TFT_BLACK);
-    fish_sprite_left_90.drawPngFile(LittleFS, "/images/neon_tetra_left_optimized.png");
+    fish_sprite_left_90.fillSprite(TFT_GREEN);
+    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_left_optimized.png", 0, 0);
+    fish_sprite_left_90.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
     
     fish_sprite_left_45.setColorDepth(16);
     fish_sprite_left_45.createSprite(FISH_WIDTH, FISH_HEIGHT);
-    fish_sprite_left_45.fillSprite(TFT_BLACK);
-    fish_sprite_left_45.drawPngFile(LittleFS, "/images/neon_tetra_45left_optimized.png");
+    fish_sprite_left_45.fillSprite(TFT_GREEN);
+    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_45left_optimized.png", 0, 0);
+    fish_sprite_left_45.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
     
     fish_sprite_front.setColorDepth(16);
     fish_sprite_front.createSprite(FISH_WIDTH, FISH_HEIGHT);
-    fish_sprite_front.fillSprite(TFT_BLACK);
-    fish_sprite_front.drawPngFile(LittleFS, "/images/neon_tetra_front_optimized.png");
+    fish_sprite_front.fillSprite(TFT_GREEN);
+    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_front_optimized.png", 0, 0);
+    fish_sprite_front.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
     
     fish_sprite_right_45.setColorDepth(16);
     fish_sprite_right_45.createSprite(FISH_WIDTH, FISH_HEIGHT);
-    fish_sprite_right_45.fillSprite(TFT_BLACK);
-    fish_sprite_right_45.drawPngFile(LittleFS, "/images/neon_tetra_45right_optimized.png");
+    fish_sprite_right_45.fillSprite(TFT_GREEN);
+    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_45right_optimized.png", 0, 0);
+    fish_sprite_right_45.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
     
     fish_sprite_right_90.setColorDepth(16);
     fish_sprite_right_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
-    fish_sprite_right_90.fillSprite(TFT_BLACK);
-    fish_sprite_right_90.drawPngFile(LittleFS, "/images/neon_tetra_right_optimized.png");
+    fish_sprite_right_90.fillSprite(TFT_GREEN);
+    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_right_optimized.png", 0, 0);
+    fish_sprite_right_90.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
     
     sprites_loaded = true;
 }
