@@ -100,7 +100,7 @@ void loop() {
 }
 
 void initDisplay() {
-    display = &gfx;
+    display = &M5.Display;
     display->init();
     display->setRotation(1);
     
@@ -137,8 +137,8 @@ void loadFishImages() {
         fish_sprites_left[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
         fish_sprites_left[i].fillSprite(TFT_GREEN);
         
-        M5.Display.drawPngFile(LittleFS, left_swim_files[i], 0, 0);
-        fish_sprites_left[i].pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+        display->drawPngFile(LittleFS, left_swim_files[i], 0, 0);
+        fish_sprites_left[i].pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
         M5_LOGI("Loaded: %s", left_swim_files[i]);
     }
     
@@ -157,8 +157,8 @@ void loadFishImages() {
         fish_sprites_right[i].createSprite(FISH_WIDTH, FISH_HEIGHT);
         fish_sprites_right[i].fillSprite(TFT_GREEN);
         
-        M5.Display.drawPngFile(LittleFS, right_swim_files[i], 0, 0);
-        fish_sprites_right[i].pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+        display->drawPngFile(LittleFS, right_swim_files[i], 0, 0);
+        fish_sprites_right[i].pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
         M5_LOGI("Loaded: %s", right_swim_files[i]);
     }
     
@@ -166,32 +166,32 @@ void loadFishImages() {
     fish_sprite_left_90.setColorDepth(16);
     fish_sprite_left_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
     fish_sprite_left_90.fillSprite(TFT_GREEN);
-    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_left_optimized.png", 0, 0);
-    fish_sprite_left_90.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+    display->drawPngFile(LittleFS, "/images/neon_tetra_left_optimized.png", 0, 0);
+    fish_sprite_left_90.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
     
     fish_sprite_left_45.setColorDepth(16);
     fish_sprite_left_45.createSprite(FISH_WIDTH, FISH_HEIGHT);
     fish_sprite_left_45.fillSprite(TFT_GREEN);
-    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_45left_optimized.png", 0, 0);
-    fish_sprite_left_45.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+    display->drawPngFile(LittleFS, "/images/neon_tetra_45left_optimized.png", 0, 0);
+    fish_sprite_left_45.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
     
     fish_sprite_front.setColorDepth(16);
     fish_sprite_front.createSprite(FISH_WIDTH, FISH_HEIGHT);
     fish_sprite_front.fillSprite(TFT_GREEN);
-    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_front_optimized.png", 0, 0);
-    fish_sprite_front.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+    display->drawPngFile(LittleFS, "/images/neon_tetra_front_optimized.png", 0, 0);
+    fish_sprite_front.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
     
     fish_sprite_right_45.setColorDepth(16);
     fish_sprite_right_45.createSprite(FISH_WIDTH, FISH_HEIGHT);
     fish_sprite_right_45.fillSprite(TFT_GREEN);
-    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_45right_optimized.png", 0, 0);
-    fish_sprite_right_45.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+    display->drawPngFile(LittleFS, "/images/neon_tetra_45right_optimized.png", 0, 0);
+    fish_sprite_right_45.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
     
     fish_sprite_right_90.setColorDepth(16);
     fish_sprite_right_90.createSprite(FISH_WIDTH, FISH_HEIGHT);
     fish_sprite_right_90.fillSprite(TFT_GREEN);
-    M5.Display.drawPngFile(LittleFS, "/images/neon_tetra_right_optimized.png", 0, 0);
-    fish_sprite_right_90.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)M5.Display.getBuffer());
+    display->drawPngFile(LittleFS, "/images/neon_tetra_right_optimized.png", 0, 0);
+    fish_sprite_right_90.pushImage(0, 0, FISH_WIDTH, FISH_HEIGHT, (uint16_t*)display->getBuffer());
     
     sprites_loaded = true;
 }
