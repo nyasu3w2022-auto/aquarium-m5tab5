@@ -328,6 +328,13 @@ M5Canvas* getFishSprite(const NeonTetra& fish) {
 }
 
 void drawScene() {
+    static uint32_t frame_count = 0;
+    bool debug_log = (frame_count % 60 == 0);  // 60フレームごとにログ出力
+    
+    if (debug_log) {
+        M5_LOGI("=== drawScene() frame %d, fishes count: %d ===", frame_count, fishes.size());
+    }
+    
     // 全魚の前回位置と今回位置を含む最小矩形を計算
     int min_x = screen_width;
     int max_x = 0;
@@ -335,6 +342,10 @@ void drawScene() {
     int max_y = 0;
     
     for (const auto& fish : fishes) {
+        if (debug_log) {
+            M5_LOGI("Fish: pos=(%d,%d), facing_right=%d, is_turning=%d, swim_phase=%.2f",
+                    fish.curr_draw_x, fish.curr_draw_y, fish.facing_right, fish.is_turning, fish.swim_phase);
+        }
         min_x = min(min_x, min(fish.prev_draw_x, fish.curr_draw_x));
         max_x = max(max_x, max(fish.prev_draw_x + FISH_WIDTH, fish.curr_draw_x + FISH_WIDTH));
         min_y = min(min_y, min(fish.prev_draw_y, fish.curr_draw_y));
@@ -349,6 +360,11 @@ void drawScene() {
     
     int rect_width = max_x - min_x;
     int rect_height = max_y - min_y;
+    
+    if (debug_log) {
+        M5_LOGI("Rect: min=(%d,%d), max=(%d,%d), size=(%dx%d)",
+                min_x, min_y, max_x, max_y, rect_width, rect_height);
+    }
     
     // バッファのサイズを変更（必要な場合のみ）
     static int prev_rect_width = 0;
@@ -372,10 +388,21 @@ void drawScene() {
         // 適切なフレームの画像を取得
         M5Canvas* sprite = getFishSprite(fish);
         
+        if (debug_log) {
+            M5_LOGI("Sprite: ptr=%p, size=(%dx%d), depth=%d, rel_pos=(%d,%d)",
+                    sprite, sprite->width(), sprite->height(), sprite->getColorDepth(), rel_x, rel_y);
+        }
+        
         // 魚を描画（緑色を透過）
         sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
     }
     
     // バッファを画面に転送
+    if (debug_log) {
+        M5_LOGI("Pushing buffer (%dx%d) to display at (%d,%d)",
+                rect_width, rect_height, min_x, min_y);
+    }
     buffer_canvas.pushSprite(display, min_x, min_y);
+    
+    frame_count++;
 }
