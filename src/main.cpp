@@ -184,7 +184,7 @@ void loadFishImages() {
                 
                 img.canvas->setColorDepth(16);
                 img.canvas->createSprite(FISH_WIDTH, FISH_HEIGHT);
-                img.canvas->fillSprite(TFT_GREEN);
+                img.canvas->fillSprite(TFT_BLACK);
                 if (img.canvas->drawPng(buffer, file_size, 0, 0)) {
                     M5_LOGI("Loaded fish image: %s", img.name);
                     sprites_loaded = true;
@@ -373,7 +373,7 @@ void drawScene() {
         M5Canvas* sprite = getFishSprite(fish);
         
         // 魚を描画（緑色を透過）
-        sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_GREEN);
+        sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
     }
     
     // バッファを画面に転送
