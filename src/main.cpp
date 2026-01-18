@@ -124,6 +124,10 @@ void initDisplay() {
 }
 
 void loadFishImages() {
+    M5_LOGI("=== Starting loadFishImages() ===");
+    M5_LOGI("Free heap: %d bytes", ESP.getFreeHeap());
+    M5_LOGI("Free PSRAM: %d bytes", ESP.getFreePsram());
+    
     // 画像情報の構造体
     struct ImageInfo {
         const char* path;
@@ -182,14 +186,26 @@ void loadFishImages() {
                 file.readBytes((char*)buffer, file_size);
                 file.close();
                 
+                img.canvas->setPsram(true);  // PSRAMを使用
                 img.canvas->setColorDepth(16);
                 img.canvas->createSprite(FISH_WIDTH, FISH_HEIGHT);
+                
+                // スプライトが正しく作成されたか確認
+                if (img.canvas->width() == 0 || img.canvas->height() == 0) {
+                    M5_LOGE("Failed to create sprite for: %s (Free heap: %d, Free PSRAM: %d)", 
+                            img.name, ESP.getFreeHeap(), ESP.getFreePsram());
+                    free(buffer);
+                    continue;
+                }
+                
                 img.canvas->fillSprite(TFT_BLACK);
-                if (img.canvas->drawPng(buffer, file_size, 0, 0)) {
-                    M5_LOGI("Loaded fish image: %s", img.name);
+                bool png_drawn = img.canvas->drawPng(buffer, file_size, 0, 0);
+                if (png_drawn) {
+                    M5_LOGI("Loaded fish image: %s (size: %dx%d, depth: %d)", 
+                            img.name, img.canvas->width(), img.canvas->height(), img.canvas->getColorDepth());
                     sprites_loaded = true;
                 } else {
-                    M5_LOGE("Failed to draw fish image: %s", img.name);
+                    M5_LOGE("Failed to draw PNG for: %s", img.name);
                 }
                 free(buffer);
             } else {
@@ -200,6 +216,10 @@ void loadFishImages() {
             M5_LOGE("Failed to open fish image file: %s", img.path);
         }
     }
+    
+    M5_LOGI("=== Finished loadFishImages() ===");
+    M5_LOGI("Final free heap: %d bytes", ESP.getFreeHeap());
+    M5_LOGI("Final free PSRAM: %d bytes", ESP.getFreePsram());
 }
 
 void initFishes() {
@@ -371,6 +391,7 @@ void drawScene() {
     static int prev_rect_height = 0;
     if (rect_width != prev_rect_width || rect_height != prev_rect_height) {
         buffer_canvas.deleteSprite();
+        buffer_canvas.setPsram(true);  // PSRAMを使用
         buffer_canvas.setColorDepth(16);
         buffer_canvas.createSprite(rect_width, rect_height);
         prev_rect_width = rect_width;
