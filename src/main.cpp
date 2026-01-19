@@ -104,7 +104,7 @@ void loop() {
 void initDisplay() {
     display = &M5.Display;
     display->init();
-    display->setRotation(1);
+    display->setRotation(3);  // 横向き（180度回転）
     
     screen_width = display->width();
     screen_height = display->height();
