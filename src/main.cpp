@@ -273,24 +273,14 @@ void updateFishes(uint32_t delta_ms) {
         fish.x += fish.vx * delta_sec * 50;
         fish.y += fish.vy * delta_sec * 50;
         
-        // 画面端での反射
+        // 画面端での反射（方向転換は後で自動的に処理される）
         if (fish.x < 0) {
             fish.x = 0;
             fish.vx = -fish.vx;
-            if (!fish.is_turning) {
-                fish.is_turning = true;
-                fish.turn_progress = 0.0f;
-                fish.turn_target_right = fish.vx > 0;
-            }
         }
         if (fish.x + fish.width > screen_width) {
             fish.x = screen_width - fish.width;
             fish.vx = -fish.vx;
-            if (!fish.is_turning) {
-                fish.is_turning = true;
-                fish.turn_progress = 0.0f;
-                fish.turn_target_right = fish.vx > 0;
-            }
         }
         if (fish.y < 0) {
             fish.y = 0;
@@ -310,6 +300,18 @@ void updateFishes(uint32_t delta_ms) {
         if (speed > MAX_SPEED) {
             fish.vx = fish.vx / speed * MAX_SPEED;
             fish.vy = fish.vy / speed * MAX_SPEED;
+        }
+        
+        // 速度の符号が変わったか確認（方向転換が必要か）
+        if (!fish.is_turning) {
+            bool new_facing_right = fish.vx > 0;
+            if (new_facing_right != fish.facing_right) {
+                // 方向が変わった → 方向転換アニメーション開始
+                fish.is_turning = true;
+                fish.turn_progress = 0.0f;
+                fish.turn_target_right = new_facing_right;
+                fish.facing_right = new_facing_right;  // 即座に更新
+            }
         }
         
         // 前回の描画位置を保存
