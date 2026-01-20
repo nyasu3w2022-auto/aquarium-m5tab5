@@ -18,6 +18,7 @@ struct NeonTetra {
     bool is_turning;   // 方向転換中かどうか
     float turn_progress; // 方向転換の進行度（0.0〜1.0）
     bool turn_target_right; // 方向転換後の向き
+    bool turn_start_facing_right; // 方向転換開始時の向き
     // 前回の描画位置（部分更新用）
     int prev_draw_x;
     int prev_draw_y;
@@ -240,6 +241,7 @@ void initFishes() {
         fish.is_turning = false;
         fish.turn_progress = 0.0f;
         fish.turn_target_right = fish.facing_right;
+        fish.turn_start_facing_right = fish.facing_right;
         fish.prev_draw_x = (int)fish.x;
         fish.prev_draw_y = (int)fish.y;
         fish.curr_draw_x = (int)fish.x;
@@ -307,6 +309,7 @@ void updateFishes(uint32_t delta_ms) {
             bool new_facing_right = fish.vx > 0;
             if (new_facing_right != fish.facing_right) {
                 // 方向が変わった → 方向転換アニメーション開始
+                fish.turn_start_facing_right = fish.facing_right;  // 古い方向を保存
                 fish.is_turning = true;
                 fish.turn_progress = 0.0f;
                 fish.turn_target_right = new_facing_right;
@@ -326,15 +329,15 @@ M5Canvas* getFishSprite(const NeonTetra& fish) {
     if (fish.is_turning) {
         // 方向転換中：5段階の画像を使用
         if (fish.turn_progress < 0.2f) {
-            return fish.facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            return fish.turn_start_facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
         } else if (fish.turn_progress < 0.4f) {
-            return fish.facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
+            return fish.turn_start_facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
         } else if (fish.turn_progress < 0.6f) {
             return &fish_sprite_front;
         } else if (fish.turn_progress < 0.8f) {
-            return fish.turn_target_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
+            return fish.facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
         } else {
-            return fish.turn_target_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            return fish.facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
         }
     } else {
         // 通常の泳ぎ：6フレームアニメーション
