@@ -19,6 +19,7 @@ struct NeonTetra {
     float turn_progress; // 方向転換の進行度（0.0〜1.0）
     bool turn_target_right; // 方向転換後の向き
     bool turn_start_facing_right; // 方向転換開始時の向き
+    bool turn_via_tail; // 尾経由で回転するか（false=正面経由）
     // 前回の描画位置（部分更新用）
     int prev_draw_x;
     int prev_draw_y;
@@ -35,12 +36,17 @@ LGFX_Device* display;
 M5Canvas fish_sprites_left[6];
 M5Canvas fish_sprites_right[6];
 
-// 方向転換用の画像（既存の5枚）
+// 方向転換用の画像（正面経由）
 M5Canvas fish_sprite_left_90;
 M5Canvas fish_sprite_left_45;
 M5Canvas fish_sprite_front;
 M5Canvas fish_sprite_right_45;
 M5Canvas fish_sprite_right_90;
+
+// 方向転換用の画像（尾経由）
+M5Canvas fish_sprite_tail;
+M5Canvas fish_sprite_tail_left_45;
+M5Canvas fish_sprite_tail_right_45;
 
 M5Canvas buffer_canvas;  // ダブルバッファ用キャンバス
 bool sprites_loaded = false;
@@ -156,7 +162,7 @@ void loadFishImages() {
         {"/images/swim/neon_tetra_right_swim6_optimized.png", &fish_sprites_right[5], "right_swim6"}
     };
     
-    // 方向転換用の画像（5枚）
+    // 方向転換用の画像（正面経由）
     ImageInfo turn_images[5] = {
         {"/images/neon_tetra_left_optimized.png", &fish_sprite_left_90, "left_90"},
         {"/images/neon_tetra_45left_optimized.png", &fish_sprite_left_45, "left_45"},
@@ -165,8 +171,15 @@ void loadFishImages() {
         {"/images/neon_tetra_right_optimized.png", &fish_sprite_right_90, "right_90"}
     };
     
+    // 方向転換用の画像（尾経由）
+    ImageInfo tail_turn_images[3] = {
+        {"/images/neon_tetra_tail_optimized.png", &fish_sprite_tail, "tail"},
+        {"/images/neon_tetra_tail_left_45_optimized.png", &fish_sprite_tail_left_45, "tail_left_45"},
+        {"/images/neon_tetra_tail_right_45_optimized.png", &fish_sprite_tail_right_45, "tail_right_45"}
+    };
+    
     // 全ての画像を読み込み
-    ImageInfo all_images[17];
+    ImageInfo all_images[20];
     for (int i = 0; i < 6; i++) {
         all_images[i] = left_swim_images[i];
         all_images[i + 6] = right_swim_images[i];
@@ -174,8 +187,11 @@ void loadFishImages() {
     for (int i = 0; i < 5; i++) {
         all_images[i + 12] = turn_images[i];
     }
+    for (int i = 0; i < 3; i++) {
+        all_images[i + 17] = tail_turn_images[i];
+    }
     
-    for (int i = 0; i < 17; i++) {
+    for (int i = 0; i < 20; i++) {
         const auto& img = all_images[i];
         File file = LittleFS.open(img.path, "r");
         
@@ -242,6 +258,7 @@ void initFishes() {
         fish.turn_progress = 0.0f;
         fish.turn_target_right = fish.facing_right;
         fish.turn_start_facing_right = fish.facing_right;
+        fish.turn_via_tail = false;
         fish.prev_draw_x = (int)fish.x;
         fish.prev_draw_y = (int)fish.y;
         fish.curr_draw_x = (int)fish.x;
@@ -314,6 +331,7 @@ void updateFishes(uint32_t delta_ms) {
                 fish.turn_progress = 0.0f;
                 fish.turn_target_right = new_facing_right;
                 fish.facing_right = new_facing_right;  // 即座に更新
+                fish.turn_via_tail = random(0, 2) == 0;  // ランダムに回転方向を選択
             }
         }
         
@@ -328,16 +346,32 @@ void updateFishes(uint32_t delta_ms) {
 M5Canvas* getFishSprite(const NeonTetra& fish) {
     if (fish.is_turning) {
         // 方向転換中：5段階の画像を使用
-        if (fish.turn_progress < 0.2f) {
-            return fish.turn_start_facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
-        } else if (fish.turn_progress < 0.4f) {
-            return fish.turn_start_facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
-        } else if (fish.turn_progress < 0.6f) {
-            return &fish_sprite_front;
-        } else if (fish.turn_progress < 0.8f) {
-            return fish.facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
+        if (fish.turn_via_tail) {
+            // 尾経由で回転
+            if (fish.turn_progress < 0.2f) {
+                return fish.turn_start_facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            } else if (fish.turn_progress < 0.4f) {
+                return fish.turn_start_facing_right ? &fish_sprite_tail_right_45 : &fish_sprite_tail_left_45;
+            } else if (fish.turn_progress < 0.6f) {
+                return &fish_sprite_tail;
+            } else if (fish.turn_progress < 0.8f) {
+                return fish.facing_right ? &fish_sprite_tail_right_45 : &fish_sprite_tail_left_45;
+            } else {
+                return fish.facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            }
         } else {
-            return fish.facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            // 正面経由で回転
+            if (fish.turn_progress < 0.2f) {
+                return fish.turn_start_facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            } else if (fish.turn_progress < 0.4f) {
+                return fish.turn_start_facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
+            } else if (fish.turn_progress < 0.6f) {
+                return &fish_sprite_front;
+            } else if (fish.turn_progress < 0.8f) {
+                return fish.facing_right ? &fish_sprite_right_45 : &fish_sprite_left_45;
+            } else {
+                return fish.facing_right ? &fish_sprite_right_90 : &fish_sprite_left_90;
+            }
         }
     } else {
         // 通常の泳ぎ：6フレームアニメーション
