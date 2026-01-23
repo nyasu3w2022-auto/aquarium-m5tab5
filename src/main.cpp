@@ -378,6 +378,17 @@ M5Canvas* getFishSprite(const NeonTetra& fish) {
         int frame_index = (int)fish.swim_phase;
         if (frame_index >= 6) frame_index = 5;
         
+        // 特定フレームの出現頻度を減らす（80%スキップ）
+        if (fish.facing_right && frame_index == 4) {  // right_swim5
+            if (random(0, 100) < 80) {
+                frame_index = 3;  // swim4を代わりに表示
+            }
+        } else if (!fish.facing_right && frame_index == 5) {  // left_swim6
+            if (random(0, 100) < 80) {
+                frame_index = 4;  // swim5を代わりに表示
+            }
+        }
+        
         if (fish.facing_right) {
             return &fish_sprites_right[frame_index];
         } else {
