@@ -49,10 +49,12 @@ M5Canvas fish_sprite_tail_left_45;
 M5Canvas fish_sprite_tail_right_45;
 
 M5Canvas buffer_canvas;  // ダブルバッファ用キャンバス
+M5Canvas background_canvas;  // 背景画像用キャンバス
 bool sprites_loaded = false;
+bool background_loaded = false;
 int screen_width = 0;
 int screen_height = 0;
-uint16_t bg_color;  // 背景色
+uint16_t bg_color;  // 背景色（フォールバック用）
 
 const int FISH_WIDTH = 358;
 const int FISH_HEIGHT = 200;
@@ -66,6 +68,7 @@ int buffer_max_height = 0;
 
 // 関数プロトタイプ
 void initDisplay();
+void loadBackgroundImage();
 void loadFishImages();
 void initFishes();
 void updateFishes(uint32_t delta_ms);
@@ -87,6 +90,9 @@ void setup() {
         M5_LOGE("LittleFS Mount Failed");
         return;
     }
+    
+    // 背景画像を読み込み
+    loadBackgroundImage();
     
     // 魚の画像を読み込み
     loadFishImages();
@@ -136,6 +142,61 @@ void initDisplay() {
     
     M5_LOGI("Display size: %d x %d", screen_width, screen_height);
     M5_LOGI("Dynamic buffer canvas enabled");
+}
+
+void loadBackgroundImage() {
+    M5_LOGI("=== Starting loadBackgroundImage() ===");
+    M5_LOGI("Free heap: %d bytes", ESP.getFreeHeap());
+    M5_LOGI("Free PSRAM: %d bytes", ESP.getFreePsram());
+    
+    const char* bg_path = "/images/aquarium_background.png";
+    File file = LittleFS.open(bg_path, "r");
+    
+    if (file) {
+        size_t file_size = file.size();
+        uint8_t* buffer = (uint8_t*)malloc(file_size);
+        
+        if (buffer) {
+            file.readBytes((char*)buffer, file_size);
+            file.close();
+            
+            background_canvas.setPsram(true);  // PSRAMを使用
+            background_canvas.setColorDepth(16);
+            background_canvas.createSprite(screen_width, screen_height);
+            
+            if (background_canvas.width() == 0 || background_canvas.height() == 0) {
+                M5_LOGE("Failed to create background sprite (Free heap: %d, Free PSRAM: %d)", 
+                        ESP.getFreeHeap(), ESP.getFreePsram());
+                free(buffer);
+                return;
+            }
+            
+            background_canvas.fillSprite(bg_color);
+            bool png_drawn = background_canvas.drawPng(buffer, file_size, 0, 0);
+            if (png_drawn) {
+                M5_LOGI("Loaded background image: size=%dx%d, depth=%d", 
+                        background_canvas.width(), background_canvas.height(), 
+                        background_canvas.getColorDepth());
+                background_loaded = true;
+                
+                // 背景画像を画面に描画
+                background_canvas.pushSprite(display, 0, 0);
+                M5_LOGI("Background image drawn to display");
+            } else {
+                M5_LOGE("Failed to draw background PNG");
+            }
+            free(buffer);
+        } else {
+            M5_LOGE("Memory allocation failed for background image");
+            file.close();
+        }
+    } else {
+        M5_LOGE("Failed to open background image file: %s", bg_path);
+    }
+    
+    M5_LOGI("=== Finished loadBackgroundImage() ===");
+    M5_LOGI("Final free heap: %d bytes", ESP.getFreeHeap());
+    M5_LOGI("Final free PSRAM: %d bytes", ESP.getFreePsram());
 }
 
 void loadFishImages() {
@@ -456,8 +517,14 @@ void drawScene() {
         prev_rect_height = rect_height;
     }
     
-    // バッファに背景色を塗る
-    buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
+    // バッファに背景を描画
+    if (background_loaded) {
+        // 背景画像から該当範囲をコピー
+        background_canvas.readRect(min_x, min_y, rect_width, rect_height, buffer_canvas.getBuffer());
+    } else {
+        // 背景画像がない場合は単色で塗りつぶし
+        buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
+    }
     
     // バッファに全ての魚を描画
     for (const auto& fish : fishes) {
