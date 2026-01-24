@@ -519,8 +519,9 @@ void drawScene() {
     
     // バッファに背景を描画
     if (background_loaded) {
-        // 背景画像から該当範囲をコピー
-        background_canvas.readRect(min_x, min_y, rect_width, rect_height, buffer_canvas.getBuffer());
+        // 背景画像から該当範囲をコピー（オフセットを指定してpushSprite）
+        buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);  // 先に背景色で埋める
+        background_canvas.pushSprite(&buffer_canvas, -min_x, -min_y);
     } else {
         // 背景画像がない場合は単色で塗りつぶし
         buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
