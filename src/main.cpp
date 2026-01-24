@@ -71,6 +71,8 @@ void initFishes();
 void updateFishes(uint32_t delta_ms);
 void drawScene();
 M5Canvas* getFishSprite(const NeonTetra& fish);
+void handleTouch();
+void triggerFishTurn(NeonTetra& fish);
 
 void setup() {
     // M5Stackの初期化
@@ -100,6 +102,12 @@ void loop() {
     uint32_t current_time = millis();
     uint32_t delta_ms = current_time - last_time;
     last_time = current_time;
+    
+    // M5の状態を更新（タッチ情報を取得）
+    M5.update();
+    
+    // タッチ処理
+    handleTouch();
     
     // 魚を更新
     updateFishes(delta_ms);
@@ -476,4 +484,51 @@ void drawScene() {
     buffer_canvas.pushSprite(display, min_x, min_y);
     
     frame_count++;
+}
+
+void handleTouch() {
+    // タッチされたかチェック
+    if (M5.Touch.getCount() > 0) {
+        auto touch = M5.Touch.getDetail();
+        if (touch.wasPressed()) {
+            int touch_x = touch.x;
+            int touch_y = touch.y;
+            
+            M5_LOGI("Touch detected at (%d, %d)", touch_x, touch_y);
+            
+            // タッチ位置にいる魚を探す
+            for (auto& fish : fishes) {
+                int fish_x = fish.curr_draw_x;
+                int fish_y = fish.curr_draw_y;
+                
+                // 魚の矩形範囲内かチェック
+                if (touch_x >= fish_x && touch_x <= fish_x + FISH_WIDTH &&
+                    touch_y >= fish_y && touch_y <= fish_y + FISH_HEIGHT) {
+                    M5_LOGI("Fish tapped! Triggering turn.");
+                    triggerFishTurn(fish);
+                    break;  // 最初にヒットした魚だけを処理
+                }
+            }
+        }
+    }
+}
+
+void triggerFishTurn(NeonTetra& fish) {
+    // 既に方向転換中の場合は無視
+    if (fish.is_turning) {
+        return;
+    }
+    
+    // 速度の方向を反転
+    fish.vx = -fish.vx;
+    fish.vy = -fish.vy;
+    
+    // 方向転換アニメーションを開始
+    bool new_facing_right = fish.vx > 0;
+    fish.turn_start_facing_right = fish.facing_right;
+    fish.is_turning = true;
+    fish.turn_progress = 0.0f;
+    fish.turn_target_right = new_facing_right;
+    fish.facing_right = new_facing_right;
+    fish.turn_via_tail = random(0, 2) == 0;  // ランダムに回転方向を選択
 }
