@@ -453,7 +453,7 @@ void updateFishes(uint32_t delta_ms) {
         fish.prev_draw_w = fish.curr_draw_w;
         fish.prev_draw_h = fish.curr_draw_h;
         // 現在の描画位置・サイズを計算
-        float scale = getDepthScale(fish.depth);
+        scale = getDepthScale(fish.depth);
         fish.curr_draw_w = (int)(FISH_WIDTH * scale);
         fish.curr_draw_h = (int)(FISH_HEIGHT * scale);
         fish.curr_draw_x = (int)fish.x;
