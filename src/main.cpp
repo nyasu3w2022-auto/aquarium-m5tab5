@@ -71,7 +71,7 @@ const float MAX_SPEED = 2.0f;
 const uint32_t DIRECTION_CHANGE_INTERVAL = 3000;  // 3秒
 const float TURN_DURATION = 1.0f;  // 方向転換にかかる時間（秒）
 const float DEPTH_SCALE_MIN = 0.7f;  // 最も奥のスケール（70%）
-const float DEPTH_SCALE_MAX = 1.3f;  // 最も手前のスケール（130%）
+const float DEPTH_SCALE_MAX = 1.0f;  // 最も手前のスケール（100%）
 const float DEPTH_CHANGE_SPEED = 0.1f;  // 奥行き変化速度（秒あたり）
 const float DEPTH_TARGET_INTERVAL = 5.0f;  // 奥行き目標変更間隔（秒）
 
