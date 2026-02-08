@@ -2,6 +2,7 @@
 #include <LittleFS.h>
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 // ネオンテトラの構造体
 struct NeonTetra {
@@ -20,12 +21,19 @@ struct NeonTetra {
     bool turn_target_right; // 方向転換後の向き
     bool turn_start_facing_right; // 方向転換開始時の向き
     bool turn_via_tail; // 尾経由で回転するか（false=正面経由）
+    // 奥行き（depth）: 0.0=最も奥、1.0=最も手前
+    float depth;
+    float depth_target;  // 奥行きの目標値
     // 前回の描画位置（部分更新用）
     int prev_draw_x;
     int prev_draw_y;
+    int prev_draw_w;
+    int prev_draw_h;
     // 今回の描画位置
     int curr_draw_x;
     int curr_draw_y;
+    int curr_draw_w;
+    int curr_draw_h;
 };
 
 // グローバル変数
@@ -62,6 +70,10 @@ const int NUM_FISHES = 3;
 const float MAX_SPEED = 2.0f;
 const uint32_t DIRECTION_CHANGE_INTERVAL = 3000;  // 3秒
 const float TURN_DURATION = 1.0f;  // 方向転換にかかる時間（秒）
+const float DEPTH_SCALE_MIN = 0.7f;  // 最も奥のスケール（70%）
+const float DEPTH_SCALE_MAX = 1.3f;  // 最も手前のスケール（130%）
+const float DEPTH_CHANGE_SPEED = 0.1f;  // 奥行き変化速度（秒あたり）
+const float DEPTH_TARGET_INTERVAL = 5.0f;  // 奥行き目標変更間隔（秒）
 
 int buffer_max_width = 0;
 int buffer_max_height = 0;
@@ -76,6 +88,7 @@ void drawScene();
 M5Canvas* getFishSprite(const NeonTetra& fish);
 void handleTouch();
 void triggerFishTurn(NeonTetra& fish);
+float getDepthScale(float depth);
 
 void setup() {
     // M5Stackの初期化
@@ -328,10 +341,19 @@ void initFishes() {
         fish.turn_target_right = fish.facing_right;
         fish.turn_start_facing_right = fish.facing_right;
         fish.turn_via_tail = false;
+        fish.depth = random(0, 100) / 100.0f;  // ランダムな奥行き
+        fish.depth_target = random(0, 100) / 100.0f;
+        float init_scale = getDepthScale(fish.depth);
+        int scaled_w = (int)(FISH_WIDTH * init_scale);
+        int scaled_h = (int)(FISH_HEIGHT * init_scale);
         fish.prev_draw_x = (int)fish.x;
         fish.prev_draw_y = (int)fish.y;
+        fish.prev_draw_w = scaled_w;
+        fish.prev_draw_h = scaled_h;
         fish.curr_draw_x = (int)fish.x;
         fish.curr_draw_y = (int)fish.y;
+        fish.curr_draw_w = scaled_w;
+        fish.curr_draw_h = scaled_h;
         
         fishes.push_back(fish);
     }
@@ -361,21 +383,24 @@ void updateFishes(uint32_t delta_ms) {
         fish.x += fish.vx * delta_sec * 50;
         fish.y += fish.vy * delta_sec * 50;
         
-        // 画面端での反射（方向転換は後で自動的に処理される）
+        // 画面端での反射（スケールを考慮）
+        float scale = getDepthScale(fish.depth);
+        int scaled_w = (int)(FISH_WIDTH * scale);
+        int scaled_h = (int)(FISH_HEIGHT * scale);
         if (fish.x < 0) {
             fish.x = 0;
             fish.vx = -fish.vx;
         }
-        if (fish.x + fish.width > screen_width) {
-            fish.x = screen_width - fish.width;
+        if (fish.x + scaled_w > screen_width) {
+            fish.x = screen_width - scaled_w;
             fish.vx = -fish.vx;
         }
         if (fish.y < 0) {
             fish.y = 0;
             fish.vy = -fish.vy;
         }
-        if (fish.y + fish.height > screen_height) {
-            fish.y = screen_height - fish.height;
+        if (fish.y + scaled_h > screen_height) {
+            fish.y = screen_height - scaled_h;
             fish.vy = -fish.vy;
         }
         
@@ -404,9 +429,33 @@ void updateFishes(uint32_t delta_ms) {
             }
         }
         
-        // 前回の描画位置を保存
+        // 奥行きの更新（横方向の移動時に少しずつ変化）
+        if (fabs(fish.vx) > 0.1f) {
+            // 奥行きを目標値に向かって少しずつ変化
+            float depth_diff = fish.depth_target - fish.depth;
+            if (fabs(depth_diff) > 0.01f) {
+                float depth_step = DEPTH_CHANGE_SPEED * delta_sec;
+                if (fabs(depth_diff) < depth_step) {
+                    fish.depth = fish.depth_target;
+                } else {
+                    fish.depth += (depth_diff > 0 ? depth_step : -depth_step);
+                }
+            } else {
+                // 目標に到達したら新しい目標を設定
+                fish.depth_target = random(0, 100) / 100.0f;
+            }
+        }
+        fish.depth = max(0.0f, min(1.0f, fish.depth));
+        
+        // 前回の描画位置・サイズを保存
         fish.prev_draw_x = fish.curr_draw_x;
         fish.prev_draw_y = fish.curr_draw_y;
+        fish.prev_draw_w = fish.curr_draw_w;
+        fish.prev_draw_h = fish.curr_draw_h;
+        // 現在の描画位置・サイズを計算
+        float scale = getDepthScale(fish.depth);
+        fish.curr_draw_w = (int)(FISH_WIDTH * scale);
+        fish.curr_draw_h = (int)(FISH_HEIGHT * scale);
         fish.curr_draw_x = (int)fish.x;
         fish.curr_draw_y = (int)fish.y;
     }
@@ -474,7 +523,7 @@ void drawScene() {
         M5_LOGI("=== drawScene() frame %d, fishes count: %d ===", frame_count, fishes.size());
     }
     
-    // 全魚の前回位置と今回位置を含む最小矩形を計算
+    // 全魚の前回位置と今回位置を含む最小矩形を計算（スケール考慮）
     int min_x = screen_width;
     int max_x = 0;
     int min_y = screen_height;
@@ -482,13 +531,14 @@ void drawScene() {
     
     for (const auto& fish : fishes) {
         if (debug_log) {
-            M5_LOGI("Fish: pos=(%d,%d), facing_right=%d, is_turning=%d, swim_phase=%.2f",
-                    fish.curr_draw_x, fish.curr_draw_y, fish.facing_right, fish.is_turning, fish.swim_phase);
+            M5_LOGI("Fish: pos=(%d,%d), depth=%.2f, scale=%.2f, size=(%dx%d)",
+                    fish.curr_draw_x, fish.curr_draw_y, fish.depth, 
+                    getDepthScale(fish.depth), fish.curr_draw_w, fish.curr_draw_h);
         }
         min_x = min(min_x, min(fish.prev_draw_x, fish.curr_draw_x));
-        max_x = max(max_x, max(fish.prev_draw_x + FISH_WIDTH, fish.curr_draw_x + FISH_WIDTH));
+        max_x = max(max_x, max(fish.prev_draw_x + fish.prev_draw_w, fish.curr_draw_x + fish.curr_draw_w));
         min_y = min(min_y, min(fish.prev_draw_y, fish.curr_draw_y));
-        max_y = max(max_y, max(fish.prev_draw_y + FISH_HEIGHT, fish.curr_draw_y + FISH_HEIGHT));
+        max_y = max(max_y, max(fish.prev_draw_y + fish.prev_draw_h, fish.curr_draw_y + fish.curr_draw_h));
     }
     
     // 余白を追加
@@ -519,29 +569,46 @@ void drawScene() {
     
     // バッファに背景を描画
     if (background_loaded) {
-        // 背景画像から該当範囲をコピー（オフセットを指定してpushSprite）
-        buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);  // 先に背景色で埋める
+        buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
         background_canvas.pushSprite(&buffer_canvas, -min_x, -min_y);
     } else {
-        // 背景画像がない場合は単色で塗りつぶし
         buffer_canvas.fillRect(0, 0, rect_width, rect_height, bg_color);
     }
     
-    // バッファに全ての魚を描画
-    for (const auto& fish : fishes) {
+    // 魚を奥行き順にソート（depthが小さい=奥から先に描画）
+    std::vector<int> draw_order(fishes.size());
+    for (int i = 0; i < (int)fishes.size(); i++) draw_order[i] = i;
+    std::sort(draw_order.begin(), draw_order.end(), [](int a, int b) {
+        return fishes[a].depth < fishes[b].depth;
+    });
+    
+    // バッファに全ての魚を奥行き順に描画
+    for (int idx : draw_order) {
+        const auto& fish = fishes[idx];
         int rel_x = fish.curr_draw_x - min_x;
         int rel_y = fish.curr_draw_y - min_y;
+        int draw_w = fish.curr_draw_w;
+        int draw_h = fish.curr_draw_h;
         
         // 適切なフレームの画像を取得
         M5Canvas* sprite = getFishSprite(fish);
         
         if (debug_log) {
-            M5_LOGI("Sprite: ptr=%p, size=(%dx%d), depth=%d, rel_pos=(%d,%d)",
-                    sprite, sprite->width(), sprite->height(), sprite->getColorDepth(), rel_x, rel_y);
+            M5_LOGI("Fish[%d]: depth=%.2f, scale=%.2f, draw_size=(%dx%d), rel_pos=(%d,%d)",
+                    idx, fish.depth, getDepthScale(fish.depth), draw_w, draw_h, rel_x, rel_y);
         }
         
-        // 魚を描画（緑色を透過）
-        sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
+        // スケールが元サイズと異なる場合は拡大縮小して描画
+        if (draw_w != FISH_WIDTH || draw_h != FISH_HEIGHT) {
+            sprite->pushRotateZoomWithAA(&buffer_canvas, 
+                rel_x + draw_w / 2, rel_y + draw_h / 2,  // 描画先の中心座標
+                0.0f,  // 回転なし
+                (float)draw_w / FISH_WIDTH,   // Xスケール
+                (float)draw_h / FISH_HEIGHT,  // Yスケール
+                TFT_BLACK);  // 透過色
+        } else {
+            sprite->pushSprite(&buffer_canvas, rel_x, rel_y, TFT_BLACK);
+        }
     }
     
     // バッファを画面に転送
@@ -569,9 +636,9 @@ void handleTouch() {
                 int fish_x = fish.curr_draw_x;
                 int fish_y = fish.curr_draw_y;
                 
-                // 魚の矩形範囲内かチェック
-                if (touch_x >= fish_x && touch_x <= fish_x + FISH_WIDTH &&
-                    touch_y >= fish_y && touch_y <= fish_y + FISH_HEIGHT) {
+                // 魚の矩形範囲内かチェック（スケール考慮）
+                if (touch_x >= fish_x && touch_x <= fish_x + fish.curr_draw_w &&
+                    touch_y >= fish_y && touch_y <= fish_y + fish.curr_draw_h) {
                     M5_LOGI("Fish tapped! Triggering turn.");
                     triggerFishTurn(fish);
                     break;  // 最初にヒットした魚だけを処理
@@ -579,6 +646,12 @@ void handleTouch() {
             }
         }
     }
+}
+
+float getDepthScale(float depth) {
+    // depth: 0.0=最も奥、1.0=最も手前
+    // スケール: DEPTH_SCALE_MIN(0.7) 〜 DEPTH_SCALE_MAX(1.3)
+    return DEPTH_SCALE_MIN + (DEPTH_SCALE_MAX - DEPTH_SCALE_MIN) * depth;
 }
 
 void triggerFishTurn(NeonTetra& fish) {
